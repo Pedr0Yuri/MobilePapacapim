@@ -1,11 +1,76 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import '../core/app_colors.dart';
+import '../data/profile_store.dart';
 import '../widgets/app_text_field.dart';
 import '../widgets/app_button.dart';
 
 // Tela de Editar Perfil. (Onde editamos a foto, nome, bio etc)
-class EditProfileScreen extends StatelessWidget {
+class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
+
+  @override
+  State<EditProfileScreen> createState() => _EditProfileScreenState();
+}
+
+class _EditProfileScreenState extends State<EditProfileScreen> {
+  final ProfileStore _profileStore = ProfileStore.instance;
+  final ImagePicker _imagePicker = ImagePicker();
+
+  @override
+  void initState() {
+    super.initState();
+    _profileStore.addListener(_onProfileChanged);
+  }
+
+  @override
+  void dispose() {
+    _profileStore.removeListener(_onProfileChanged);
+    super.dispose();
+  }
+
+  void _onProfileChanged() => setState(() {});
+
+  Future<void> _pickProfileImage(ImageSource source) async {
+    try {
+      final file = await _imagePicker.pickImage(
+        source: source,
+        // Redimensionamento via plugin falha em alguns ambientes Web.
+        maxWidth: kIsWeb ? null : 1200,
+        maxHeight: kIsWeb ? null : 1200,
+        imageQuality: kIsWeb ? null : 88,
+      );
+      if (file == null || !mounted) return;
+
+      final bytes = await file.readAsBytes();
+      if (!mounted) return;
+      _profileStore.setLocalProfileImageBytes(bytes);
+    } on PlatformException catch (e) {
+      if (!mounted) return;
+      _showPickError(source, e.message);
+    } catch (_) {
+      if (!mounted) return;
+      _showPickError(source, null);
+    }
+  }
+
+  void _showPickError(ImageSource source, String? detail) {
+    final isCamera = source == ImageSource.camera;
+    final base = isCamera
+        ? 'Não foi possível abrir a câmera.'
+        : 'Não foi possível abrir a galeria.';
+    final message = (detail != null && detail.isNotEmpty) ? '$base ($detail)' : base;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.danger,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    );
+  }
 
   // Função que abre uma "gaveta" de baixo para cima (BottomSheet) perguntando de onde quer pegar a foto.
   void _showPhotoOptions(BuildContext context) {
@@ -15,7 +80,7 @@ class EditProfileScreen extends StatelessWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (context) {
+      builder: (sheetContext) {
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
@@ -41,7 +106,13 @@ class EditProfileScreen extends StatelessWidget {
                   iconColor: AppColors.accent,
                   title: 'Selecionar da Galeria',
                   subtitle: 'Escolha uma foto do seu dispositivo',
-                  onTap: () => Navigator.pop(context), // Apenas fecha por enquanto
+                  onTap: () {
+                    // No Web o seletor precisa ser aberto ainda no gesto do toque;
+                    // fechar o sheet antes quebra a abertura da galeria/câmera no Chrome.
+                    _pickProfileImage(ImageSource.gallery).whenComplete(() {
+                      if (sheetContext.mounted) Navigator.pop(sheetContext);
+                    });
+                  },
                 ),
                 const SizedBox(height: 12),
                 
@@ -52,7 +123,11 @@ class EditProfileScreen extends StatelessWidget {
                   iconColor: AppColors.cta,
                   title: 'Tirar Foto',
                   subtitle: 'Use a câmera do seu dispositivo',
-                  onTap: () => Navigator.pop(context),
+                  onTap: () {
+                    _pickProfileImage(ImageSource.camera).whenComplete(() {
+                      if (sheetContext.mounted) Navigator.pop(sheetContext);
+                    });
+                  },
                 ),
                 const SizedBox(height: 12),
               ],
@@ -60,6 +135,18 @@ class EditProfileScreen extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildProfileAvatar() {
+    final imageProvider = _profileStore.profileImageProvider;
+    return CircleAvatar(
+      radius: 52,
+      backgroundColor: AppColors.inputBg,
+      backgroundImage: imageProvider,
+      child: imageProvider == null
+          ? Icon(Icons.person, size: 48, color: AppColors.textSecondary.withValues(alpha: 0.5))
+          : null,
     );
   }
 
@@ -109,11 +196,7 @@ class EditProfileScreen extends StatelessWidget {
                           ),
                         ],
                       ),
-                      child: CircleAvatar(
-                        radius: 52,
-                        backgroundColor: AppColors.inputBg,
-                        child: Icon(Icons.person, size: 48, color: AppColors.textSecondary.withValues(alpha: 0.5)),
-                      ),
+                      child: _buildProfileAvatar(),
                     ),
                     // Pequeno botão de câmera sobreposto no canto
                     Container(

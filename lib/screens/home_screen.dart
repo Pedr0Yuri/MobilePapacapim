@@ -3,6 +3,8 @@ import '../core/app_colors.dart';
 import '../core/bird_logo.dart';
 import 'feed_screen.dart';
 import 'profile_screen.dart';
+import 'search_screen.dart';
+import '../data/posts_store.dart';
 
 // A HomeScreen é o "esqueleto" principal depois que o usuário loga.
 // É um StatefulWidget porque precisa gerenciar qual aba (feed, busca, perfil) está ativa no momento.
@@ -22,10 +24,9 @@ class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   // Lista de telas correspondentes a cada aba da navegação inferior.
-  // Se remover a _SearchPlaceholder daqui, o app vai quebrar quando tentar acessar o index 1.
   final List<Widget> _pages = const [
     FeedScreen(),
-    _SearchPlaceholder(), // Tela temporária de busca
+    SearchScreen(),
     _NotificationsPlaceholder(), // Tela temporária de notificações
     ProfileScreen(),
   ];
@@ -420,57 +421,8 @@ class _NavIcon extends StatelessWidget {
 }
 
 
-// --- TELAS PLACEHOLDER (Temporárias) --- //
-// Como ainda não programamos as telas de Busca e Notificações de verdade, usamos esses placeholders.
-// Sem eles, ao clicar nas abas, o app quebraria.
-
-class _SearchPlaceholder extends StatelessWidget {
-  const _SearchPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // Fake AppBar
-        Container(
-          height: 72 + MediaQuery.of(context).padding.top,
-          padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
-          decoration: BoxDecoration(
-            color: AppColors.primary,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: const Center(
-            child: Text(
-              'Buscar',
-              style: TextStyle(color: AppColors.white, fontSize: 22, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ),
-        const Expanded(
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.search_rounded, size: 56, color: AppColors.inputBorder),
-                SizedBox(height: 16),
-                Text(
-                  'Busca em breve',
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: 16, fontWeight: FontWeight.w500),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
+// --- TELA PLACEHOLDER (Temporária) --- //
+// Notificações ainda não implementada.
 
 class _NotificationsPlaceholder extends StatelessWidget {
   const _NotificationsPlaceholder();
@@ -520,8 +472,30 @@ class _NotificationsPlaceholder extends StatelessWidget {
 }
 
 // Widget da tela que desliza de baixo para cima para escrever uma nova postagem.
-class _NewPostSheet extends StatelessWidget {
+class _NewPostSheet extends StatefulWidget {
   const _NewPostSheet();
+
+  @override
+  State<_NewPostSheet> createState() => _NewPostSheetState();
+}
+
+class _NewPostSheetState extends State<_NewPostSheet> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _publish() {
+    final content = _controller.text.trim();
+    // Se o campo estiver vazio, não faz sentido criar uma postagem.
+    if (content.isEmpty) return;
+
+    PostsStore.instance.addPost(content);
+    Navigator.pop(context);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -569,7 +543,7 @@ class _NewPostSheet extends StatelessWidget {
                     style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary, fontSize: 17),
                   ),
                   ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: _publish,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.cta,
                       foregroundColor: AppColors.white,
@@ -601,6 +575,7 @@ class _NewPostSheet extends StatelessWidget {
                   // Campo de texto principal
                   Expanded(
                     child: TextField(
+                      controller: _controller,
                       autofocus: true, // Já abre o teclado direto
                       maxLines: null, // Cresce infinitamente conforme digita
                       decoration: const InputDecoration(

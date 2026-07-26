@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
+import '../data/posts_store.dart';
+import '../data/profile_store.dart';
 
 // Tela de Perfil. É StatefulWidget porque gerencia animações de abas (Tabs) e rolagem paralela.
 class ProfileScreen extends StatefulWidget {
@@ -13,68 +15,27 @@ class ProfileScreen extends StatefulWidget {
 // Basicamente avisa o Flutter para sincronizar os frames de animação da aba com a taxa de atualização da tela.
 class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-
-  // Posts do próprio usuário.
-  static const List<Map<String, dynamic>> _userPosts = [
-    {
-      'content': 'Lorem ipsum dolor sit amet',
-      'time': '2m',
-      'likes': 24,
-      'replies': 5,
-    },
-    {
-      'content': 'Lorem ipsum dolor sit amet',
-      'time': '3h',
-      'likes': 45,
-      'replies': 12,
-    },
-    {
-      'content': 'Lorem ipsum dolor sit amet',
-      'time': '1d',
-      'likes': 98,
-      'replies': 18,
-    },
-    {
-      'content': 'Lorem ipsum dolor sit amet',
-      'time': '2d',
-      'likes': 67,
-      'replies': 9,
-    },
-  ];
-
-  // Posts que o usuário salvou ou repostou
-  static const List<Map<String, dynamic>> _likedPosts = [
-    {
-      'name': 'Mariana Silva',
-      'handle': '@mariana_dev',
-      'content': 'Lorem ipsum dolor sit amet',
-      'time': '5h',
-      'likes': 156,
-      'replies': 23,
-    },
-    {
-      'name': 'Carlos Neto',
-      'handle': '@carlos.neto',
-      'content': 'Lorem ipsum dolor sit amet',
-      'time': '8h',
-      'likes': 89,
-      'replies': 14,
-    },
-  ];
+  final PostsStore _store = PostsStore.instance;
+  final ProfileStore _profileStore = ProfileStore.instance;
 
   @override
   void initState() {
     super.initState();
-    // length: 2 porque temos 2 abas (Postagens e Repostados)
     _tabController = TabController(length: 2, vsync: this);
+    // Mantém o perfil sincronizado com curtidas, respostas e novos posts.
+    _store.addListener(_onPostsChanged);
+    _profileStore.addListener(_onPostsChanged);
   }
 
   @override
   void dispose() {
-    // Boa prática: limpar o controlador da memória quando a tela for fechada (destroy).
+    _store.removeListener(_onPostsChanged);
+    _profileStore.removeListener(_onPostsChanged);
     _tabController.dispose();
     super.dispose();
   }
+
+  void _onPostsChanged() => setState(() {});
 
   @override
   Widget build(BuildContext context) {
@@ -109,8 +70,8 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             body: TabBarView(
               controller: _tabController,
               children: [
-                _buildPostsList(_userPosts, isOwn: true), // Aba 1
-                _buildPostsList(_likedPosts, isOwn: false), // Aba 2
+                _buildPostsList(_store.ownPosts, isOwn: true),
+                _buildPostsList(_store.repostedPosts, isOwn: false),
               ],
             ),
           ),
@@ -176,11 +137,14 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 child: CircleAvatar(
                   radius: 44,
                   backgroundColor: AppColors.card,
-                  child: Icon(
-                    Icons.person_rounded,
-                    size: 48,
-                    color: AppColors.secondary.withValues(alpha: 0.5),
-                  ),
+                  backgroundImage: _profileStore.profileImageProvider,
+                  child: _profileStore.profileImageProvider == null
+                      ? Icon(
+                          Icons.person_rounded,
+                          size: 48,
+                          color: AppColors.secondary.withValues(alpha: 0.5),
+                        )
+                      : null,
                 ),
               ),
             ),
@@ -371,32 +335,69 @@ class _TabBarDelegate extends SliverPersistentHeaderDelegate {
 
 // Widget que desenha cada post especificamente na TELA DE PERFIL.
 // (É similar, mas mais simples que o _PostCard do Feed geral)
-class _PostTile extends StatefulWidget {
+class _PostTile extends StatelessWidget {
   final Map<String, dynamic> post;
-  final bool isOwn; // Determina se devemos usar nome fake do dono ou o do post
+  final bool isOwn;
+
   const _PostTile({required this.post, required this.isOwn});
 
-  @override
-  State<_PostTile> createState() => _PostTileState();
-}
+  bool get _isCurrentUserPost => post['handle'] == PostsStore.currentUserHandle;
 
-class _PostTileState extends State<_PostTile> {
-  late bool liked;
-  late int likes;
-
-  @override
-  void initState() {
-    super.initState();
-    liked = !widget.isOwn; // Apenas simula: seus posts você não curtiu, os repostados sim.
-    likes = widget.post['likes'] as int;
+  void _showDeleteConfirmation(BuildContext context) {
+    final postId = post['id'] as String;
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: AppColors.card,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text(
+            'Excluir publicação?',
+            style: TextStyle(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w700,
+              fontSize: 18,
+            ),
+          ),
+          content: const Text(
+            'Tem certeza de que deseja excluir esta publicação?',
+            style: TextStyle(color: AppColors.textPrimary, height: 1.5),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text(
+                'Cancelar',
+                style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                PostsStore.instance.deletePost(postId);
+              },
+              child: const Text(
+                'Excluir',
+                style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // Se for post próprio (isOwn), força o nome para Gustavo. Senão, puxa da variável post['name'].
-    final name = widget.isOwn ? 'Gustavo Just' : widget.post['name'] as String;
-    final handle = widget.isOwn ? '@gustavo' : widget.post['handle'] as String;
+    final name = isOwn ? PostsStore.currentUserName : post['name'] as String;
+    final handle = isOwn ? PostsStore.currentUserHandle : post['handle'] as String;
     final initial = name[0];
+    final liked = post['liked'] as bool;
+    final likes = post['likes'] as int;
+    final replies = post['replies'] as int;
+    final replyList = post['replyList'] as List<Map<String, dynamic>>;
+    final postId = post['id'] as String;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -417,15 +418,15 @@ class _PostTileState extends State<_PostTile> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               // Fundo dinâmico dependendo de quem é o dono.
-              color: widget.isOwn
+              color: isOwn
                   ? AppColors.secondary.withValues(alpha: 0.12)
                   : AppColors.cta.withValues(alpha: 0.12),
             ),
             child: Center(
               child: Text(
-                initial, // A letra do nome
+                initial,
                 style: TextStyle(
-                  color: widget.isOwn ? AppColors.secondary : AppColors.cta,
+                  color: isOwn ? AppColors.secondary : AppColors.cta,
                   fontWeight: FontWeight.w700,
                   fontSize: 17,
                 ),
@@ -459,38 +460,74 @@ class _PostTileState extends State<_PostTile> {
                       style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500),
                     ),
                     Text(
-                      ' · ${widget.post['time']}', // Ex: · 2m
+                      ' · ${post['time']}',
                       style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
                     ),
                     const Spacer(),
-                    Icon(Icons.more_horiz, color: AppColors.textSecondary.withValues(alpha: 0.5), size: 18), // Botão de opções vazio
+                    if (_isCurrentUserPost)
+                      SizedBox(
+                        width: 32,
+                        height: 32,
+                        child: PopupMenuButton<String>(
+                          padding: EdgeInsets.zero,
+                          icon: Icon(
+                            Icons.more_horiz,
+                            color: AppColors.textSecondary.withValues(alpha: 0.5),
+                            size: 18,
+                          ),
+                          color: AppColors.card,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          splashRadius: 16,
+                          onSelected: (value) {
+                            if (value == 'delete') _showDeleteConfirmation(context);
+                          },
+                          itemBuilder: (context) => [
+                            PopupMenuItem<String>(
+                              value: 'delete',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    'Excluir',
+                                    style: TextStyle(
+                                      color: AppColors.danger,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                   ],
                 ),
                 const SizedBox(height: 8),
                 
                 // Texto do post
                 Text(
-                  widget.post['content'] as String,
+                  post['content'] as String,
                   style: const TextStyle(
                     color: AppColors.textPrimary,
                     fontSize: 15,
                     height: 1.55,
                   ),
                 ),
+                PostReplyList(replies: replyList),
                 const SizedBox(height: 14),
-                
-                // Botões de engajamento do perfil, menores do que no feed, sem texto na frente
                 Row(
                   children: [
                     _ActionIcon(
                       icon: Icons.chat_bubble_outline_rounded,
-                      count: widget.post['replies'] as int,
-                      onTap: () {},
+                      count: replies,
+                      onTap: () => showPostReplySheet(context, postId),
                     ),
                     const SizedBox(width: 28),
                     _ActionIcon(
                       icon: Icons.repeat_rounded,
-                      count: (widget.post['likes'] as int) ~/ 4,
+                      count: likes ~/ 4,
                       onTap: () {},
                     ),
                     const SizedBox(width: 28),
@@ -498,12 +535,7 @@ class _PostTileState extends State<_PostTile> {
                       icon: liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
                       count: likes,
                       color: liked ? const Color(0xFFE74C3C) : null,
-                      onTap: () {
-                        setState(() {
-                          liked = !liked;
-                          likes += liked ? 1 : -1;
-                        });
-                      },
+                      onTap: () => PostsStore.instance.toggleLike(postId),
                     ),
                     const SizedBox(width: 28),
                     _ActionIcon(
