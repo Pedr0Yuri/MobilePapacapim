@@ -5,7 +5,7 @@ import '../data/profile_store.dart';
 // Guarda os posts em memória enquanto o app está aberto, simulando o back-end.
 class PostsStore extends ChangeNotifier {
   PostsStore._();
-  
+
   static final PostsStore instance = PostsStore._();
 
   static const String currentUserName = 'Pedr0Yuri';
@@ -17,8 +17,7 @@ class PostsStore extends ChangeNotifier {
   // Handles mockados de perfis que o usuário logado segue (sem API).
   List<String> followedHandles = ['@GeovaniCardeal'];
 
-  bool isFollowedAuthor(String handle) =>
-      followedHandles.contains(handle);
+  bool isFollowedAuthor(String handle) => followedHandles.contains(handle);
 
   List<Map<String, dynamic>> get followedFeedPosts => posts
       .where((post) => isFollowedAuthor(post['handle'] as String))
@@ -159,6 +158,12 @@ class PostsStore extends ChangeNotifier {
 // Bottom sheet reutilizado pelo Feed e pelo Perfil para responder um post.
 void showPostReplySheet(BuildContext context, String postId) {
   final controller = TextEditingController();
+  final focusNode = FocusNode();
+
+  // Pede o foco só depois que o sheet terminou de montar.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    focusNode.requestFocus();
+  });
 
   showModalBottomSheet(
     context: context,
@@ -167,7 +172,9 @@ void showPostReplySheet(BuildContext context, String postId) {
     backgroundColor: Colors.transparent,
     builder: (sheetContext) {
       return Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+        ),
         child: DraggableScrollableSheet(
           initialChildSize: 0.55,
           minChildSize: 0.4,
@@ -212,16 +219,13 @@ void showPostReplySheet(BuildContext context, String postId) {
                         ),
                       ),
                       ElevatedButton(
-                        onPressed: () async {
+                        onPressed: () {
                           final text = controller.text.trim();
                           if (text.isEmpty) return;
 
-                          FocusScope.of(context).unfocus();
-                          await Future.delayed(const Duration(milliseconds: 50));
-
-                          if (context.mounted) {
-                            Navigator.pop(sheetContext);
-                          }
+                          // Sem await: unfocus e pop no mesmo frame.
+                          focusNode.unfocus();
+                          Navigator.pop(sheetContext);
                           PostsStore.instance.addReply(postId, text);
                         },
                         style: ElevatedButton.styleFrom(
@@ -252,13 +256,22 @@ void showPostReplySheet(BuildContext context, String postId) {
                         children: [
                           Builder(
                             builder: (context) {
-                              final img = ProfileStore.instance.profileImageProvider;
+                              final img =
+                                  ProfileStore.instance.profileImageProvider;
                               return CircleAvatar(
                                 radius: 21,
-                                backgroundColor: AppColors.secondary.withValues(alpha: 0.15),
+                                backgroundColor: AppColors.secondary.withValues(
+                                  alpha: 0.15,
+                                ),
                                 backgroundImage: img,
                                 child: img == null
-                                    ? Icon(Icons.person, color: AppColors.secondary.withValues(alpha: 0.5), size: 24)
+                                    ? Icon(
+                                        Icons.person,
+                                        color: AppColors.secondary.withValues(
+                                          alpha: 0.5,
+                                        ),
+                                        size: 24,
+                                      )
                                     : null,
                               );
                             },
@@ -267,7 +280,7 @@ void showPostReplySheet(BuildContext context, String postId) {
                           Expanded(
                             child: TextField(
                               controller: controller,
-                              autofocus: true,
+                              focusNode: focusNode,
                               maxLines: null,
                               decoration: const InputDecoration(
                                 hintText: 'Escreva sua resposta...',
@@ -295,7 +308,10 @@ void showPostReplySheet(BuildContext context, String postId) {
         ),
       );
     },
-  ).whenComplete(controller.dispose);
+  ).whenComplete(() {
+    controller.dispose();
+    focusNode.dispose();
+  });
 }
 
 // Lista compacta de respostas exibida abaixo do conteúdo do post.
@@ -327,11 +343,16 @@ class PostReplyList extends StatelessWidget {
               children: [
                 Builder(
                   builder: (context) {
-                    final isMe = reply['handle'] == PostsStore.currentUserHandle;
-                    final img = isMe ? ProfileStore.instance.profileImageProvider : null;
+                    final isMe =
+                        reply['handle'] == PostsStore.currentUserHandle;
+                    final img = isMe
+                        ? ProfileStore.instance.profileImageProvider
+                        : null;
                     return CircleAvatar(
                       radius: 16,
-                      backgroundColor: AppColors.secondary.withValues(alpha: 0.15),
+                      backgroundColor: AppColors.secondary.withValues(
+                        alpha: 0.15,
+                      ),
                       backgroundImage: img,
                       child: img == null
                           ? Icon(
