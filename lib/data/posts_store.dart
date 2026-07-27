@@ -127,6 +127,28 @@ class PostsStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  void deleteReply(String id) {
+    _deleteReplyRec(id, posts);
+    notifyListeners();
+  }
+
+  bool _deleteReplyRec(String id, List<Map<String, dynamic>> currentList) {
+    for (var item in currentList) {
+      if (item['replyList'] != null) {
+        final replyList = item['replyList'] as List<Map<String, dynamic>>;
+        final index = replyList.indexWhere((r) => r['id'] == id);
+        if (index != -1) {
+          replyList.removeAt(index);
+          item['replies'] = (item['replies'] as int) - 1;
+          if ((item['replies'] as int) < 0) item['replies'] = 0;
+          return true;
+        }
+        if (_deleteReplyRec(id, replyList)) return true;
+      }
+    }
+    return false;
+  }
+
   // Curtida fica centralizada aqui pra refletir igual no Feed e no Perfil.
   void toggleLike(String id) {
     final post = findPost(id);
@@ -344,21 +366,78 @@ class PostReplyList extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    reply['name'] as String,
-                                    style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary, fontSize: 13),
+                                  Expanded(
+                                    child: Row(
+                                      children: [
+                                        Flexible(
+                                          child: Text(
+                                            reply['name'] as String,
+                                            style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary, fontSize: 13),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Flexible(
+                                          child: Text(
+                                            reply['handle'] as String,
+                                            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w500),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          '· ${reply['time']}',
+                                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    reply['handle'] as String,
-                                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w500),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    '· ${reply['time']}',
-                                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                                  ),
+                                  if (reply['handle'] == PostsStore.currentUserHandle)
+                                    SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: PopupMenuButton<String>(
+                                        padding: EdgeInsets.zero,
+                                        icon: const Icon(Icons.more_horiz, color: AppColors.textSecondary, size: 16),
+                                        color: AppColors.card,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                        onSelected: (val) {
+                                          if (val == 'delete') {
+                                            showDialog(
+                                              context: context,
+                                              builder: (ctx) => AlertDialog(
+                                                title: const Text('Excluir', style: TextStyle(color: AppColors.danger)),
+                                                content: const Text('Excluir este comentário?'),
+                                                actions: [
+                                                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+                                                  TextButton(
+                                                    onPressed: () { 
+                                                      PostsStore.instance.deleteReply(reply['id']); 
+                                                      Navigator.pop(ctx); 
+                                                    }, 
+                                                    child: const Text('Excluir', style: TextStyle(color: AppColors.danger))
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                          }
+                                        },
+                                        itemBuilder: (context) => [
+                                          const PopupMenuItem(
+                                            value: 'delete', 
+                                            child: Row(
+                                              children: [
+                                                Icon(Icons.delete_outline, color: AppColors.danger, size: 18), 
+                                                SizedBox(width: 8), 
+                                                Text('Excluir', style: TextStyle(color: AppColors.danger, fontSize: 14, fontWeight: FontWeight.w600))
+                                              ]
+                                            )
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                 ],
                               ),
                               const SizedBox(height: 4),
