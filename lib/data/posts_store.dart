@@ -157,161 +157,121 @@ class PostsStore extends ChangeNotifier {
 
 // Bottom sheet reutilizado pelo Feed e pelo Perfil para responder um post.
 void showPostReplySheet(BuildContext context, String postId) {
-  final controller = TextEditingController();
-  final focusNode = FocusNode();
-
-  // Pede o foco só depois que o sheet terminou de montar.
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    focusNode.requestFocus();
-  });
+  final TextEditingController controller = TextEditingController();
 
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     useRootNavigator: true,
     backgroundColor: Colors.transparent,
-    builder: (sheetContext) {
-      return Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
-        ),
-        child: DraggableScrollableSheet(
-          initialChildSize: 0.55,
-          minChildSize: 0.4,
-          maxChildSize: 0.9,
-          builder: (context, scrollController) {
-            return Container(
-              decoration: const BoxDecoration(
-                color: AppColors.card,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    builder: (_) => DraggableScrollableSheet(
+      initialChildSize: 0.75,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 16,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.inputBorder,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-              child: Column(
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: AppColors.inputBorder,
-                      borderRadius: BorderRadius.circular(2),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text(
+                      'Cancelar',
+                      style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w500),
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  const Text(
+                    'Responder',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      final text = controller.text.trim();
+                      if (text.isNotEmpty) {
+                        PostsStore.instance.addReply(postId, text);
+                      }
+                      Navigator.pop(context);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.cta,
+                      foregroundColor: AppColors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: const Text('Enviar'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: scrollController,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(sheetContext),
-                        child: const Text(
-                          'Cancelar',
-                          style: TextStyle(
-                            color: AppColors.textSecondary,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      const Text(
-                        'Responder',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                          fontSize: 17,
-                        ),
-                      ),
-                      ElevatedButton(
-                        onPressed: () {
-                          final text = controller.text.trim();
-                          if (text.isEmpty) return;
-
-                          // Sem await: unfocus e pop no mesmo frame.
-                          focusNode.unfocus();
-                          Navigator.pop(sheetContext);
-                          PostsStore.instance.addReply(postId, text);
+                      Builder(
+                        builder: (context) {
+                          final img = ProfileStore.instance.profileImageProvider;
+                          return CircleAvatar(
+                            radius: 21,
+                            backgroundColor: AppColors.secondary.withValues(alpha: 0.15),
+                            backgroundImage: img,
+                            child: img == null
+                                ? Icon(Icons.person, color: AppColors.secondary.withValues(alpha: 0.5), size: 24)
+                                : null,
+                          );
                         },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.cta,
-                          foregroundColor: AppColors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: TextField(
+                          controller: controller,
+                          autofocus: true,
+                          maxLines: null,
+                          decoration: const InputDecoration(
+                            hintText: 'Escreva sua resposta...',
+                            hintStyle: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 17,
+                            ),
+                            border: InputBorder.none,
                           ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 10,
-                          ),
-                          elevation: 0,
-                        ),
-                        child: const Text(
-                          'Enviar',
-                          style: TextStyle(fontWeight: FontWeight.w600),
+                          style: const TextStyle(fontSize: 17, height: 1.5),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      controller: scrollController,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Builder(
-                            builder: (context) {
-                              final img =
-                                  ProfileStore.instance.profileImageProvider;
-                              return CircleAvatar(
-                                radius: 21,
-                                backgroundColor: AppColors.secondary.withValues(
-                                  alpha: 0.15,
-                                ),
-                                backgroundImage: img,
-                                child: img == null
-                                    ? Icon(
-                                        Icons.person,
-                                        color: AppColors.secondary.withValues(
-                                          alpha: 0.5,
-                                        ),
-                                        size: 24,
-                                      )
-                                    : null,
-                              );
-                            },
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: TextField(
-                              controller: controller,
-                              focusNode: focusNode,
-                              maxLines: null,
-                              decoration: const InputDecoration(
-                                hintText: 'Escreva sua resposta...',
-                                hintStyle: TextStyle(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 16,
-                                ),
-                                border: InputBorder.none,
-                              ),
-                              style: const TextStyle(
-                                color: AppColors.textPrimary,
-                                fontSize: 16,
-                                height: 1.5,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            );
-          },
-        ),
-      );
-    },
-  ).whenComplete(() {
-    controller.dispose();
-    focusNode.dispose();
-  });
+            ],
+          ),
+        );
+      },
+    ),
+  ).whenComplete(controller.dispose);
 }
 
 // Lista compacta de respostas exibida abaixo do conteúdo do post.
