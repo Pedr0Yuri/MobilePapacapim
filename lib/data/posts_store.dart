@@ -92,8 +92,16 @@ class PostsStore extends ChangeNotifier {
       posts.where((post) => repostedPostIds.contains(post['id'])).toList();
 
   Map<String, dynamic>? findPost(String id) {
-    for (final post in posts) {
-      if (post['id'] == id) return post;
+    return _findPostOrReply(id, posts);
+  }
+
+  Map<String, dynamic>? _findPostOrReply(String id, List<Map<String, dynamic>> currentList) {
+    for (final item in currentList) {
+      if (item['id'] == id) return item;
+      if (item['replyList'] != null) {
+        final found = _findPostOrReply(id, item['replyList'] as List<Map<String, dynamic>>);
+        if (found != null) return found;
+      }
     }
     return null;
   }
@@ -144,11 +152,16 @@ class PostsStore extends ChangeNotifier {
     if (post == null) return;
 
     final replyList = post['replyList'] as List<Map<String, dynamic>>;
-    replyList.add({
+    replyList.insert(0, {
+      'id': 'reply_${DateTime.now().millisecondsSinceEpoch}',
       'name': currentUserName,
       'handle': currentUserHandle,
       'content': content,
       'time': 'agora',
+      'likes': 0,
+      'liked': false,
+      'replies': 0,
+      'replyList': <Map<String, dynamic>>[],
     });
     post['replies'] = (post['replies'] as int) + 1;
     notifyListeners();
@@ -276,12 +289,12 @@ class _ReplyScreenState extends State<_ReplyScreen> {
   }
 }
 
-// Lista compacta de respostas exibida abaixo do conteúdo do post.
+// Lista de respostas exibida abaixo do conteúdo do post (recursiva para "escadinha").
 class PostReplyList extends StatelessWidget {
-  final String postId;
   final List<Map<String, dynamic>> replies;
+  final double indent;
 
-  const PostReplyList({super.key, required this.postId, required this.replies});
+  const PostReplyList({super.key, required this.replies, this.indent = 0});
 
   @override
   Widget build(BuildContext context) {
@@ -290,95 +303,122 @@ class PostReplyList extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 14),
-        // Depois de enviar, mostro as respostas junto com o post.
+        if (indent == 0) const SizedBox(height: 14),
         ...replies.map(
-          (reply) => GestureDetector(
-            onTap: () => showPostReplySheet(context, postId, initialText: '${reply['handle']} '),
-            child: Container(
-              width: double.infinity,
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.inputBg.withValues(alpha: 0.65),
-                borderRadius: BorderRadius.circular(14),
-              ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Builder(
-                  builder: (context) {
-                    final isMe =
-                        reply['handle'] == PostsStore.currentUserHandle;
-                    final img = isMe
-                        ? ProfileStore.instance.profileImageProvider
-                        : null;
-                    return CircleAvatar(
-                      radius: 16,
-                      backgroundColor: AppColors.secondary.withValues(
-                        alpha: 0.15,
-                      ),
-                      backgroundImage: img,
-                      child: img == null
-                          ? Icon(
-                              Icons.person,
-                              color: AppColors.secondary.withValues(alpha: 0.5),
-                              size: 18,
-                            )
-                          : null,
-                    );
-                  },
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            reply['name'] as String,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
-                              fontSize: 13,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            reply['handle'] as String,
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            '· ${reply['time']}',
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        reply['content'] as String,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 14,
-                          height: 1.45,
+          (reply) {
+            final hasNestedReplies = (reply['replyList'] as List?)?.isNotEmpty ?? false;
+            
+            return Padding(
+              padding: EdgeInsets.only(left: indent == 0 ? 0 : 16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.inputBg.withValues(alpha: 0.65),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Builder(
+                          builder: (context) {
+                            final isMe = reply['handle'] == PostsStore.currentUserHandle;
+                            final img = isMe ? ProfileStore.instance.profileImageProvider : null;
+                            return CircleAvatar(
+                              radius: 16,
+                              backgroundColor: AppColors.secondary.withValues(alpha: 0.15),
+                              backgroundImage: img,
+                              child: img == null
+                                  ? Icon(Icons.person, color: AppColors.secondary.withValues(alpha: 0.5), size: 18)
+                                  : null,
+                            );
+                          },
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    reply['name'] as String,
+                                    style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary, fontSize: 13),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    reply['handle'] as String,
+                                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w500),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    '· ${reply['time']}',
+                                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                reply['content'] as String,
+                                style: const TextStyle(color: AppColors.textPrimary, fontSize: 14, height: 1.45),
+                              ),
+                              const SizedBox(height: 8),
+                              // Botões Curtir e Responder
+                              Row(
+                                children: [
+                                  GestureDetector(
+                                    onTap: () => PostsStore.instance.toggleLike(reply['id']),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          (reply['liked'] ?? false) ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                                          size: 16,
+                                          color: (reply['liked'] ?? false) ? AppColors.likeRed : AppColors.textSecondary,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '${reply['likes'] ?? 0}',
+                                          style: TextStyle(
+                                            color: (reply['liked'] ?? false) ? AppColors.likeRed : AppColors.textSecondary,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  GestureDetector(
+                                    onTap: () => showPostReplySheet(context, reply['id']),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.chat_bubble_outline_rounded, size: 16, color: AppColors.textSecondary),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '${reply['replies'] ?? 0}',
+                                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ),
-          ),
+                  if (hasNestedReplies)
+                    PostReplyList(replies: reply['replyList'], indent: indent + 16),
+                ],
+              ),
+            );
+          },
         ),
       ],
     );
