@@ -147,7 +147,7 @@ class PostDetailScreen extends StatelessWidget {
                           const SizedBox(height: 16),
                           if ((post['replyList'] as List).isNotEmpty)
                             const Text('Comentários', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                          PostReplyList(replies: post['replyList']),
+                          PostReplyList(postId: post['id'], replies: post['replyList']),
                         ],
                       ),
                     ),

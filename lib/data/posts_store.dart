@@ -156,25 +156,32 @@ class PostsStore extends ChangeNotifier {
 }
 
 // Abre a tela de resposta como rota completa (evita bug de modal + teclado no Android).
-void showPostReplySheet(BuildContext context, String postId) {
+void showPostReplySheet(BuildContext context, String postId, {String? initialText}) {
   Navigator.of(context, rootNavigator: true).push(
     MaterialPageRoute(
       fullscreenDialog: true,
-      builder: (_) => _ReplyScreen(postId: postId),
+      builder: (_) => _ReplyScreen(postId: postId, initialText: initialText),
     ),
   );
 }
 
 class _ReplyScreen extends StatefulWidget {
   final String postId;
-  const _ReplyScreen({required this.postId});
+  final String? initialText;
+  const _ReplyScreen({required this.postId, this.initialText});
 
   @override
   State<_ReplyScreen> createState() => _ReplyScreenState();
 }
 
 class _ReplyScreenState extends State<_ReplyScreen> {
-  final TextEditingController _controller = TextEditingController();
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialText);
+  }
 
   @override
   void dispose() {
@@ -271,9 +278,10 @@ class _ReplyScreenState extends State<_ReplyScreen> {
 
 // Lista compacta de respostas exibida abaixo do conteúdo do post.
 class PostReplyList extends StatelessWidget {
+  final String postId;
   final List<Map<String, dynamic>> replies;
 
-  const PostReplyList({super.key, required this.replies});
+  const PostReplyList({super.key, required this.postId, required this.replies});
 
   @override
   Widget build(BuildContext context) {
@@ -285,14 +293,16 @@ class PostReplyList extends StatelessWidget {
         const SizedBox(height: 14),
         // Depois de enviar, mostro as respostas junto com o post.
         ...replies.map(
-          (reply) => Container(
-            width: double.infinity,
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.inputBg.withValues(alpha: 0.65),
-              borderRadius: BorderRadius.circular(14),
-            ),
+          (reply) => GestureDetector(
+            onTap: () => showPostReplySheet(context, postId, initialText: '${reply['handle']} '),
+            child: Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.inputBg.withValues(alpha: 0.65),
+                borderRadius: BorderRadius.circular(14),
+              ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -367,6 +377,7 @@ class PostReplyList extends StatelessWidget {
                 ),
               ],
             ),
+          ),
           ),
         ),
       ],
