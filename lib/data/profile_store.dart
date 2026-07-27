@@ -2,9 +2,12 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
-/// Bytes da foto de perfil escolhida (somente na sessão do app, sem upload).
+// Gerencia o estado da foto de perfil.
+// Usamos ChangeNotifier para atualizar a UI quando a foto mudar.
 class ProfileStore extends ChangeNotifier {
   ProfileStore._();
+  
+  // Instância global única.
   static final ProfileStore instance = ProfileStore._();
 
   Uint8List? localProfileImageBytes;
