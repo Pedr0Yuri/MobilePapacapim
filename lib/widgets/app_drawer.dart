@@ -21,12 +21,13 @@ class AppDrawer extends StatelessWidget {
         borderRadius: BorderRadius.horizontal(right: Radius.circular(20)),
       ),
       child: SafeArea(
+        top: false,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+              padding: EdgeInsets.fromLTRB(24, 28 + MediaQuery.of(context).padding.top, 24, 24),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
