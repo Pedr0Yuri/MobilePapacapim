@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'core/app_colors.dart';
 import 'screens/login_screen.dart';
@@ -9,6 +10,13 @@ import 'screens/help_screen.dart';
 
 // Ponto de entrada do app.
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+    systemNavigationBarColor: AppColors.background,
+    systemNavigationBarIconBrightness: Brightness.dark,
+  ));
   runApp(const PapacapimApp());
 }
 
