@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../data/profile_store.dart';
 
-// Componente do menu lateral.
+// Drawer menu.
 class AppDrawer extends StatelessWidget {
   final VoidCallback onLogout;
   final VoidCallback onProfileTap;

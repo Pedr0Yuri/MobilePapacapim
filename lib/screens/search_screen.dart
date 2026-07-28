@@ -7,7 +7,7 @@ import '../widgets/post_card.dart';
 import 'profile_screen.dart';
 import 'post_detail_screen.dart' as import_detail;
 
-// Tela de Busca e Filtros.
+// Tela de pesquisa.
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
 
@@ -223,8 +223,7 @@ class _SearchScreenState extends State<SearchScreen>
                     padding: const EdgeInsets.only(bottom: 16),
                     child: PostCard(
                       post: post,
-                      isSimplified:
-                          true, // Oculta a barra de curtir/comentar na pesquisa
+                      isSimplified: true, // Hide action bar
                       onTap: () {
                         Navigator.of(context, rootNavigator: true).push(
                           MaterialPageRoute(

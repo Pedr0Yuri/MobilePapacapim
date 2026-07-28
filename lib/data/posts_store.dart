@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../data/profile_store.dart';
 
-// Guarda os posts em memória enquanto o app está aberto, simulando o back-end.
+// Store de mock para publicações.
 class PostsStore extends ChangeNotifier {
   PostsStore._();
 
@@ -11,10 +11,7 @@ class PostsStore extends ChangeNotifier {
   static const String currentUserName = 'Pedr0Yuri';
   static const String currentUserHandle = '@Pedr0Yuri';
 
-  // IDs dos posts repostados.
-  static const List<String> repostedPostIds = ['2', '3'];
-
-  // Handles mockados de perfis que o usuário logado segue (sem API).
+  // Lista de perfis que o usuário logado segue (dados mockados).
   List<String> followedHandles = ['@GeovaniCardeal'];
 
   bool isFollowedAuthor(String handle) => followedHandles.contains(handle);
@@ -88,9 +85,6 @@ class PostsStore extends ChangeNotifier {
   List<Map<String, dynamic>> get ownPosts =>
       posts.where((post) => post['handle'] == currentUserHandle).toList();
 
-  List<Map<String, dynamic>> get repostedPosts =>
-      posts.where((post) => repostedPostIds.contains(post['id'])).toList();
-
   Map<String, dynamic>? findPost(String id) {
     return _findPostOrReply(id, posts);
   }
@@ -106,7 +100,7 @@ class PostsStore extends ChangeNotifier {
     return null;
   }
 
-  // Nova postagem vai pro topo do feed com os dados mockados do usuário logado.
+  // Adiciona novo post no topo do feed (inserção mockada).
   void addPost(String content) {
     posts.insert(0, {
       'id': DateTime.now().millisecondsSinceEpoch.toString(),
@@ -128,11 +122,11 @@ class PostsStore extends ChangeNotifier {
   }
 
   void deleteReply(String id) {
-    _deleteReplyRec(id, posts);
+    _deleteReplyRecursively(id, posts);
     notifyListeners();
   }
 
-  bool _deleteReplyRec(String id, List<Map<String, dynamic>> currentList) {
+  bool _deleteReplyRecursively(String id, List<Map<String, dynamic>> currentList) {
     for (var item in currentList) {
       if (item['replyList'] != null) {
         final replyList = item['replyList'] as List<Map<String, dynamic>>;
@@ -143,13 +137,13 @@ class PostsStore extends ChangeNotifier {
           if ((item['replies'] as int) < 0) item['replies'] = 0;
           return true;
         }
-        if (_deleteReplyRec(id, replyList)) return true;
+        if (_deleteReplyRecursively(id, replyList)) return true;
       }
     }
     return false;
   }
 
-  // Curtida fica centralizada aqui pra refletir igual no Feed e no Perfil.
+  // Alterna o estado de curtida do post, refletindo em todo o app.
   void toggleLike(String id) {
     final post = findPost(id);
     if (post == null) return;
@@ -190,7 +184,7 @@ class PostsStore extends ChangeNotifier {
   }
 }
 
-// Abre a tela de resposta como rota completa (evita bug de modal + teclado no Android).
+// Navega para a tela de resposta em modo fullscreen para evitar conflitos de teclado.
 void showPostReplySheet(BuildContext context, String postId, {String? initialText}) {
   Navigator.of(context, rootNavigator: true).push(
     MaterialPageRoute(
@@ -311,12 +305,12 @@ class _ReplyScreenState extends State<_ReplyScreen> {
   }
 }
 
-// Lista de respostas exibida abaixo do conteúdo do post (recursiva para "escadinha").
+// Componente visual que renderiza as respostas de forma recursiva (efeito escadinha).
 class PostReplyList extends StatelessWidget {
   final List<Map<String, dynamic>> replies;
-  final double indent;
+  final int depth;
 
-  const PostReplyList({super.key, required this.replies, this.indent = 0});
+  const PostReplyList({super.key, required this.replies, this.depth = 0});
 
   @override
   Widget build(BuildContext context) {
@@ -325,13 +319,14 @@ class PostReplyList extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (indent == 0) const SizedBox(height: 14),
+        if (depth == 0) const SizedBox(height: 14),
         ...replies.map(
           (reply) {
             final hasNestedReplies = (reply['replyList'] as List?)?.isNotEmpty ?? false;
             
+            // Limita a escadinha a 3 níveis para não dar overflow na tela
             return Padding(
-              padding: EdgeInsets.only(left: indent == 0 ? 0 : 16.0),
+              padding: EdgeInsets.only(left: depth == 0 ? 0 : (depth <= 3 ? 16.0 : 0.0)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -493,7 +488,7 @@ class PostReplyList extends StatelessWidget {
                     ),
                   ),
                   if (hasNestedReplies)
-                    PostReplyList(replies: reply['replyList'], indent: indent + 16),
+                    PostReplyList(replies: reply['replyList'], depth: depth + 1),
                 ],
               ),
             );

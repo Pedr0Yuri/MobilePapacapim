@@ -22,6 +22,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final ImagePicker _imagePicker = ImagePicker();
   final GlobalKey _cropKey = GlobalKey();
 
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmPasswordController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -30,6 +33,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   void dispose() {
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
     _profileStore.removeListener(_onProfileChanged);
     super.dispose();
   }
@@ -265,13 +270,53 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 const SizedBox(height: 20),
                 const AppTextField(label: 'Nome', icon: Icons.badge_outlined, initialValue: 'Pedr0Yuri'),
                 const SizedBox(height: 16),
-                const AppTextField(label: 'Nova Senha', icon: Icons.lock_outline, obscureText: true),
+                AppTextField(label: 'Nova Senha', icon: Icons.lock_outline, obscureText: true, controller: _passwordController),
                 const SizedBox(height: 16),
-                const AppTextField(label: 'Confirmar Nova Senha', icon: Icons.lock_outline, obscureText: true),
+                AppTextField(label: 'Confirmar Nova Senha', icon: Icons.lock_outline, obscureText: true, controller: _confirmPasswordController),
                 const SizedBox(height: 36),
                 AppButton(
                   label: 'Salvar Alterações',
                   onPressed: () {
+                    final pass = _passwordController.text;
+                    final confirm = _confirmPasswordController.text;
+
+                    if (pass.isNotEmpty || confirm.isNotEmpty) {
+                      if (pass != confirm) {
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            backgroundColor: AppColors.card,
+                            title: const Text('Senhas não coincidem', style: TextStyle(color: AppColors.danger)),
+                            content: const Text('A nova senha e a confirmação devem ser iguais.', style: TextStyle(color: AppColors.textPrimary)),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx),
+                                child: const Text('OK', style: TextStyle(color: AppColors.cta)),
+                              ),
+                            ],
+                          ),
+                        );
+                        return;
+                      }
+                      if (pass.length < 3) {
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            backgroundColor: AppColors.card,
+                            title: const Text('Senha muito curta', style: TextStyle(color: AppColors.danger)),
+                            content: const Text('A nova senha deve ter no mínimo 3 caracteres.', style: TextStyle(color: AppColors.textPrimary)),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx),
+                                child: const Text('OK', style: TextStyle(color: AppColors.cta)),
+                              ),
+                            ],
+                          ),
+                        );
+                        return;
+                      }
+                    }
+
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: const Text('Alterações salvas com sucesso!'),

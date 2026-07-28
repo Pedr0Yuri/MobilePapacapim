@@ -3,7 +3,7 @@ import '../core/app_colors.dart';
 import '../data/posts_store.dart';
 import '../data/profile_store.dart';
 
-// Exibe o modal de criar postagem.
+// Cria post modal.
 void showNewPostModal(BuildContext context) {
   final TextEditingController controller = TextEditingController();
 
@@ -49,9 +49,14 @@ void showNewPostModal(BuildContext context) {
                       style: TextStyle(color: AppColors.textSecondary),
                     ),
                   ),
-                  const Text(
-                    'Nova postagem',
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
+                  Expanded(
+                    child: Text(
+                      'Nova postagem',
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
+                    ),
                   ),
                   ElevatedButton(
                     onPressed: () {

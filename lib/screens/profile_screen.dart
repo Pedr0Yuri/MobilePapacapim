@@ -44,7 +44,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final myPosts = isOwnProfile
+    final profilePosts = isOwnProfile
         ? _store.ownPosts
         : _store.posts.where((p) => p['handle'] == widget.handle).toList();
 
@@ -89,9 +89,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
               body: ListView.builder(
                 padding: EdgeInsets.zero,
-                itemCount: myPosts.length,
+                itemCount: profilePosts.length,
                 itemBuilder: (context, i) {
-                  final post = myPosts[i];
+                  final post = profilePosts[i];
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                     child: PostCard(

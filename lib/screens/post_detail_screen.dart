@@ -4,7 +4,7 @@ import '../data/posts_store.dart';
 import '../data/profile_store.dart';
 import 'profile_screen.dart';
 
-// Tela de Detalhes da Postagem (Foco na Leitura e Respostas).
+// Detalhes do post.
 class PostDetailScreen extends StatelessWidget {
   final String postId;
 

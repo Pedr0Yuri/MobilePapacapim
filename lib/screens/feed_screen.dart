@@ -7,7 +7,7 @@ import '../widgets/post_card.dart';
 import 'profile_screen.dart';
 import 'post_detail_screen.dart' as import_detail;
 
-// Tela do Feed de Postagens.
+// Feed.
 class FeedScreen extends StatefulWidget {
   const FeedScreen({super.key});
 

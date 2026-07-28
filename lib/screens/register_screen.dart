@@ -3,7 +3,7 @@ import '../core/app_colors.dart';
 import '../widgets/app_text_field.dart';
 import '../widgets/app_button.dart';
 
-// Tela de Cadastro da Aplicação.
+// Tela de registro.
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
 
@@ -26,12 +26,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  void _handleRegister() {
+  bool _isFormValid() {
     List<String> missingFields = [];
     if (_nameController.text.trim().length < 3) missingFields.add('Nome (mínimo de 3 caracteres)');
     if (_loginController.text.trim().length < 3) missingFields.add('Login (mínimo de 3 caracteres)');
     if (_passwordController.text.trim().length < 3) missingFields.add('Senha (mínimo de 3 caracteres)');
     if (_confirmPasswordController.text.trim().length < 3) missingFields.add('Confirmação de Senha (mínimo de 3 caracteres)');
+
+    if (_passwordController.text != _confirmPasswordController.text) {
+      missingFields.add('As senhas não coincidem');
+    }
 
     if (missingFields.isNotEmpty) {
       showDialog(
@@ -51,8 +55,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ],
         ),
       );
-      return;
+      return false;
     }
+    return true;
+  }
+
+  void _handleRegister() {
+    if (!_isFormValid()) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -63,7 +72,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ),
     );
 
-    // Caso de sucesso, volta para tela de login
+    // Sucesso -> Login
     Navigator.pushReplacementNamed(context, '/login');
   }
 

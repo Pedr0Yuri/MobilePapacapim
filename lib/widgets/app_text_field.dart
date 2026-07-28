@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 
-// Componente global de Campo de Texto (Input).
+// Text input.
 class AppTextField extends StatelessWidget {
   final String label;
   final IconData icon;
