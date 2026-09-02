@@ -10,8 +10,11 @@ class AppButton extends StatelessWidget {
   final VoidCallback onPressed;
   final AppButtonVariant variant;
   final IconData? icon;
+  // Quando true, desabilita o botão e mostra um spinner no lugar do texto.
+  // Usado enquanto uma requisição para a API está em andamento.
+  final bool loading;
 
-  const AppButton({super.key, required this.label, required this.onPressed, this.variant = AppButtonVariant.filled, this.icon});
+  const AppButton({super.key, required this.label, required this.onPressed, this.variant = AppButtonVariant.filled, this.icon, this.loading = false});
 
   @override
   Widget build(BuildContext context) {
@@ -20,9 +23,14 @@ class AppButton extends StatelessWidget {
         return SizedBox(
           width: double.infinity, height: 52,
           child: ElevatedButton(
-            onPressed: onPressed,
+            onPressed: loading ? null : onPressed,
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.cta, foregroundColor: AppColors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: 0, textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            child: Text(label),
+            child: loading
+                ? const SizedBox(
+                    width: 22, height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2.4, valueColor: AlwaysStoppedAnimation(AppColors.white)),
+                  )
+                : Text(label),
           ),
         );
       case AppButtonVariant.text:

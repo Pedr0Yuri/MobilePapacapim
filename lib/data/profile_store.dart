@@ -12,14 +12,25 @@ class ProfileStore extends ChangeNotifier {
 
   Uint8List? localProfileImageBytes;
 
+  String? networkProfileImageUrl;
+
   void setLocalProfileImageBytes(Uint8List bytes) {
     localProfileImageBytes = bytes;
     notifyListeners();
   }
 
+  void setNetworkProfileImageUrl(String? url) {
+    networkProfileImageUrl = url;
+    notifyListeners();
+  }
+
   ImageProvider? get profileImageProvider {
     final bytes = localProfileImageBytes;
-    if (bytes == null) return null;
-    return MemoryImage(bytes);
+    if (bytes != null) return MemoryImage(bytes);
+ 
+    final url = networkProfileImageUrl;
+    if (url != null && url.isNotEmpty) return NetworkImage(url);
+ 
+    return null;
   }
 }

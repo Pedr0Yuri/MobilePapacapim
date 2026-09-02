@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
+import '../data/api_exception.dart';
+import '../data/repositories/auth_repository.dart';
 import '../widgets/app_text_field.dart';
 import '../widgets/app_button.dart';
 
@@ -16,6 +18,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _loginController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -60,20 +63,57 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return true;
   }
 
-  void _handleRegister() {
+  Future<void> _handleRegister() async {
     if (!_isFormValid()) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Conta criada com sucesso!'),
-        backgroundColor: AppColors.accent,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    setState(() => _isLoading = true);
+
+    try {
+      // Chama POST /users na API. Se dar certo, a conta já existe no back-end e o usuário pode fazer login normalmente.
+      await AuthRepository.instance.createUser(
+        login: _loginController.text.trim(),
+        name: _nameController.text.trim(),
+        password: _passwordController.text,
+        passwordConfirmation: _confirmPasswordController.text,
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Conta criada com sucesso!'),
+          backgroundColor: AppColors.accent,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      );
+
+      // Sucesso -> Login
+      Navigator.pushReplacementNamed(context, '/login');
+    } on ApiException catch (e) {
+      // Erro vindo da API (ex: login já em uso, senha muito curta para o back-end, etc.). Mostramos a mensagem que a API retornou.
+      if (!mounted) return;
+      _showErrorDialog(e.message);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: const Text('Não foi possível cadastrar', style: TextStyle(color: AppColors.danger)),
+        content: Text(message, style: const TextStyle(color: AppColors.textPrimary)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK', style: TextStyle(color: AppColors.cta)),
+          ),
+        ],
       ),
     );
-
-    // Sucesso -> Login
-    Navigator.pushReplacementNamed(context, '/login');
   }
 
   @override

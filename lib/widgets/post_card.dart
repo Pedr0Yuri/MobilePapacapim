@@ -75,7 +75,13 @@ class PostCard extends StatelessWidget {
               Builder(
                 builder: (context) {
                   final isMe = post['handle'] == PostsStore.currentUserHandle;
-                  final img = isMe ? ProfileStore.instance.profileImageProvider : null;
+                  final networkUrl = post['profileImage'] as String?;
+                  final fallbackNetworkImage = (networkUrl != null && networkUrl.isNotEmpty)
+                      ? NetworkImage(networkUrl)
+                      : null;
+                  final img = isMe
+                      ? (ProfileStore.instance.profileImageProvider ?? fallbackNetworkImage)
+                      : fallbackNetworkImage;
 
                   return CircleAvatar(
                     radius: 21,

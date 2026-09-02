@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../data/profile_store.dart';
+import 'api_exception.dart';
+import 'repositories/posts_repository.dart';
+import 'session_store.dart';
 
 // Store de mock para publicações.
 class PostsStore extends ChangeNotifier {
@@ -8,87 +11,80 @@ class PostsStore extends ChangeNotifier {
 
   static final PostsStore instance = PostsStore._();
 
-  static const String currentUserName = 'Pedr0Yuri';
-  static const String currentUserHandle = '@Pedr0Yuri';
+  final PostsRepository _repository = PostsRepository.instance;
 
-  // Lista de perfis que o usuário logado segue (dados mockados).
-  List<String> followedHandles = ['@GeovaniCardeal'];
+  // Antes eram valores fixos (mockados). Agora refletem o usuário realmente autenticado, guardado no SessionStore após o login.
+  static String get currentUserName =>
+      SessionStore.instance.userLogin ?? '';
+  static String get currentUserHandle =>
+      '@${SessionStore.instance.userLogin ?? ''}';
+ 
 
+  bool isLoadingFeed = false;
+  String? feedError;
+ 
+  // Ids das postagens retornadas por GET /posts?feed=1 (postagens de quem você segue). Usado para separar as abas "Todos" / "Seguindo" do feed com dados reais da API.
+  Set<String> _followingPostIds = {};
+ 
+  List<String> followedHandles = [];
+ 
   bool isFollowedAuthor(String handle) => followedHandles.contains(handle);
-
+ 
+  // Baseado nos ids retornados de verdade por GET /posts?feed=1 (ver loadFeed() abaixo) — não depende mais de followedHandles.
   List<Map<String, dynamic>> get followedFeedPosts => posts
-      .where((post) => isFollowedAuthor(post['handle'] as String))
+      .where((post) => _followingPostIds.contains(post['id']))
       .toList();
-
+ 
   List<Map<String, dynamic>> get recommendedFeedPosts => posts
-      .where((post) => !isFollowedAuthor(post['handle'] as String))
+      .where((post) => !_followingPostIds.contains(post['id']))
       .toList();
-
-  final List<Map<String, dynamic>> posts = [
-    {
-      'id': '1',
-      'name': 'Pedr0Yuri',
-      'handle': '@Pedr0Yuri',
-      'time': '2m',
-      'content': 'Lorem ipsum dolor sit amet',
-      'likes': 24,
-      'replies': 5,
-      'liked': false,
-      'replyList': <Map<String, dynamic>>[],
-    },
-    {
-      'id': '2',
-      'name': 'Geovani Cardeal',
-      'handle': '@GeovaniCardeal',
-      'time': '18m',
-      'content': 'ola mundo',
-      'likes': 12,
-      'replies': 3,
-      'liked': true,
-      'replyList': <Map<String, dynamic>>[],
-    },
-    {
-      'id': '3',
-      'name': 'Nadson',
-      'handle': '@JesusÉoCaminho',
-      'time': '45m',
-      'content': 'ola mundo',
-      'likes': 89,
-      'replies': 14,
-      'liked': false,
-      'replyList': <Map<String, dynamic>>[],
-    },
-    {
-      'id': '4',
-      'name': 'Zoe Sabina',
-      'handle': '@Zozoze',
-      'time': '1h',
-      'content': 'Lorem ipsum dolor sit amet',
-      'likes': 57,
-      'replies': 8,
-      'liked': false,
-      'replyList': <Map<String, dynamic>>[],
-    },
-    {
-      'id': '5',
-      'name': 'Ana Bia',
-      'handle': '@biaAragao',
-      'time': '2h',
-      'content': 'Lorem ipsum dolor sit amet',
-      'likes': 134,
-      'replies': 22,
-      'liked': true,
-      'replyList': <Map<String, dynamic>>[],
-    },
-  ];
-
+ 
+  // Antes era uma lista mockada fixa. Agora começa vazia e é preenchida por loadFeed(), com dados reais vindos da API.
+  final List<Map<String, dynamic>> posts = [];
+ 
+  // Carrega o feed a partir da API.
+  Future<void> loadFeed() async {
+    isLoadingFeed = true;
+    feedError = null;
+    notifyListeners();
+ 
+    try {
+      final results = await Future.wait([
+        _repository.getFeed(),
+        _repository.getFeed(followingOnly: true),
+      ]);
+      final allPosts = results[0];
+      final followingPosts = results[1];
+ 
+      // Monta a lista única de posts (fonte de verdade usada por toda a
+      // UI), evitando duplicar um post que apareça nas duas respostas.
+      final byId = <String, Map<String, dynamic>>{
+        for (final post in allPosts) post.id.toString(): post.toUiMap(),
+      };
+      for (final post in followingPosts) {
+        byId.putIfAbsent(post.id.toString(), () => post.toUiMap());
+      }
+ 
+      posts
+        ..clear()
+        ..addAll(byId.values);
+ 
+      _followingPostIds = followingPosts.map((p) => p.id.toString()).toSet();
+    } on ApiException catch (e) {
+      feedError = e.message;
+    } finally {
+      isLoadingFeed = false;
+      notifyListeners();
+    }
+  }
+ 
   List<Map<String, dynamic>> get ownPosts =>
       posts.where((post) => post['handle'] == currentUserHandle).toList();
-
+ 
   Map<String, dynamic>? findPost(String id) {
     return _findPostOrReply(id, posts);
   }
-
+ 
   Map<String, dynamic>? _findPostOrReply(String id, List<Map<String, dynamic>> currentList) {
     for (final item in currentList) {
       if (item['id'] == id) return item;
@@ -99,7 +95,7 @@ class PostsStore extends ChangeNotifier {
     }
     return null;
   }
-
+ 
   // Adiciona novo post no topo do feed (inserção mockada).
   void addPost(String content) {
     posts.insert(0, {
@@ -115,17 +111,17 @@ class PostsStore extends ChangeNotifier {
     });
     notifyListeners();
   }
-
+ 
   void deletePost(String id) {
     posts.removeWhere((post) => post['id'] == id);
     notifyListeners();
   }
-
+ 
   void deleteReply(String id) {
     _deleteReplyRecursively(id, posts);
     notifyListeners();
   }
-
+ 
   bool _deleteReplyRecursively(String id, List<Map<String, dynamic>> currentList) {
     for (var item in currentList) {
       if (item['replyList'] != null) {
@@ -142,18 +138,18 @@ class PostsStore extends ChangeNotifier {
     }
     return false;
   }
-
+ 
   // Alterna o estado de curtida do post, refletindo em todo o app.
   void toggleLike(String id) {
     final post = findPost(id);
     if (post == null) return;
-
+ 
     final liked = post['liked'] as bool;
     post['liked'] = !liked;
     post['likes'] = (post['likes'] as int) + (liked ? -1 : 1);
     notifyListeners();
   }
-
+ 
   void toggleFollow(String handle) {
     if (followedHandles.contains(handle)) {
       followedHandles.remove(handle);
@@ -162,11 +158,11 @@ class PostsStore extends ChangeNotifier {
     }
     notifyListeners();
   }
-
+ 
   void addReply(String id, String content) {
     final post = findPost(id);
     if (post == null) return;
-
+ 
     final replyList = post['replyList'] as List<Map<String, dynamic>>;
     replyList.insert(0, {
       'id': 'reply_${DateTime.now().millisecondsSinceEpoch}',
@@ -183,7 +179,7 @@ class PostsStore extends ChangeNotifier {
     notifyListeners();
   }
 }
-
+ 
 // Navega para a tela de resposta em modo fullscreen para evitar conflitos de teclado.
 void showPostReplySheet(BuildContext context, String postId, {String? initialText}) {
   Navigator.of(context, rootNavigator: true).push(
@@ -193,25 +189,25 @@ void showPostReplySheet(BuildContext context, String postId, {String? initialTex
     ),
   );
 }
-
+ 
 class _ReplyScreen extends StatefulWidget {
   final String postId;
   final String? initialText;
   const _ReplyScreen({required this.postId, this.initialText});
-
+ 
   @override
   State<_ReplyScreen> createState() => _ReplyScreenState();
 }
-
+ 
 class _ReplyScreenState extends State<_ReplyScreen> {
   late final TextEditingController _controller;
-
+ 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.initialText);
   }
-
+ 
   @override
   void dispose() {
     _controller.dispose();

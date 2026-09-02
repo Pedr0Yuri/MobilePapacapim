@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -5,7 +6,11 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../core/app_colors.dart';
+import '../data/api_exception.dart';
+import '../data/posts_store.dart';
 import '../data/profile_store.dart';
+import '../data/repositories/auth_repository.dart';
+import '../data/session_store.dart';
 import '../widgets/app_text_field.dart';
 import '../widgets/app_button.dart';
 
@@ -22,17 +27,26 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final ImagePicker _imagePicker = ImagePicker();
   final GlobalKey _cropKey = GlobalKey();
 
+  final TextEditingController _nameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
+
+  bool _imageChanged = false;
+ 
+  bool _isLoadingProfile = true;
+  bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
     _profileStore.addListener(_onProfileChanged);
+    _nameController.text = PostsStore.currentUserName;
+    _loadCurrentUser();
   }
 
   @override
   void dispose() {
+    _nameController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     _profileStore.removeListener(_onProfileChanged);
@@ -43,6 +57,22 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _loadCurrentUser() async {
+    try {
+      final user = await AuthRepository.instance.getCurrentUser();
+      if (!mounted) return;
+      _nameController.text = user.name;
+      _profileStore.setNetworkProfileImageUrl(user.profileImage);
+    } on ApiException {
+    } finally {
+      if (mounted) setState(() => _isLoadingProfile = false);
+    }
+  }
+ 
+  void _setLocalImage(Uint8List bytes) {
+    _profileStore.setLocalProfileImageBytes(bytes);
+    _imageChanged = true;
+  }
 
   Future<void> _pickProfileImage(ImageSource source) async {
     try {
@@ -227,6 +257,101 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
+    void _showDialog(String title, String message) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: Text(title, style: const TextStyle(color: AppColors.danger)),
+        content: Text(message, style: const TextStyle(color: AppColors.textPrimary)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK', style: TextStyle(color: AppColors.cta)),
+          ),
+        ],
+      ),
+    );
+  }
+ 
+  Future<void> _handleSave() async {
+    final name = _nameController.text.trim();
+    final pass = _passwordController.text;
+    final confirm = _confirmPasswordController.text;
+ 
+    if (name.length < 3) {
+      _showDialog('Nome inválido', 'O nome deve ter no mínimo 3 caracteres.');
+      return;
+    }
+ 
+    final isChangingPassword = pass.isNotEmpty || confirm.isNotEmpty;
+ 
+    if (isChangingPassword) {
+      if (pass != confirm) {
+        _showDialog('Senhas não coincidem', 'A nova senha e a confirmação devem ser iguais.');
+        return;
+      }
+      if (pass.length < 3) {
+        _showDialog('Senha muito curta', 'A nova senha deve ter no mínimo 3 caracteres.');
+        return;
+      }
+    }
+ 
+    setState(() => _isSaving = true);
+ 
+    try {
+      // Só manda a foto se o usuário realmente trocou ela NESTA sessão —
+      // caso contrário a API mantém a foto que já estava salva.
+      String? imageBase64;
+      if (_imageChanged && _profileStore.localProfileImageBytes != null) {
+        imageBase64 = base64Encode(_profileStore.localProfileImageBytes!);
+      }
+ 
+      // Chama PATCH /users/me na API.
+      await AuthRepository.instance.updateUser(
+        name: name,
+        password: isChangingPassword ? pass : null,
+        passwordConfirmation: isChangingPassword ? confirm : null,
+        imageDataBase64: imageBase64,
+      );
+ 
+      if (!mounted) return;
+ 
+      if (isChangingPassword) {
+        // A API invalida todas as sessões (inclusive a nossa) ao trocar a senha
+        await SessionStore.instance.clear();
+        if (!mounted) return;
+ 
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Senha alterada! Faça login novamente.'),
+            backgroundColor: AppColors.accent,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+        );
+        Navigator.of(context, rootNavigator: true)
+            .pushNamedAndRemoveUntil('/login', (route) => false);
+        return;
+      }
+ 
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Alterações salvas com sucesso!'),
+          backgroundColor: AppColors.accent,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      );
+      Navigator.pop(context);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      _showDialog('Não foi possível salvar', e.message);
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -264,11 +389,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                const Text('Pedr0Yuri', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                Text(PostsStore.currentUserName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
                 const SizedBox(height: 2),
-                const Text('@Pedr0Yuri', style: TextStyle(color: AppColors.textSecondary, fontSize: 14, fontWeight: FontWeight.w500)),
+                Text(PostsStore.currentUserHandle, style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, fontWeight: FontWeight.w500)),
                 const SizedBox(height: 20),
-                const AppTextField(label: 'Nome', icon: Icons.badge_outlined, initialValue: 'Pedr0Yuri'),
+                if (_isLoadingProfile) const Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                ),
+                AppTextField(label: 'Nome', icon: Icons.badge_outlined, controller: _nameController),
                 const SizedBox(height: 16),
                 AppTextField(label: 'Nova Senha', icon: Icons.lock_outline, obscureText: true, controller: _passwordController),
                 const SizedBox(height: 16),
@@ -276,57 +405,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 const SizedBox(height: 36),
                 AppButton(
                   label: 'Salvar Alterações',
-                  onPressed: () {
-                    final pass = _passwordController.text;
-                    final confirm = _confirmPasswordController.text;
-
-                    if (pass.isNotEmpty || confirm.isNotEmpty) {
-                      if (pass != confirm) {
-                        showDialog(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            backgroundColor: AppColors.card,
-                            title: const Text('Senhas não coincidem', style: TextStyle(color: AppColors.danger)),
-                            content: const Text('A nova senha e a confirmação devem ser iguais.', style: TextStyle(color: AppColors.textPrimary)),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctx),
-                                child: const Text('OK', style: TextStyle(color: AppColors.cta)),
-                              ),
-                            ],
-                          ),
-                        );
-                        return;
-                      }
-                      if (pass.length < 3) {
-                        showDialog(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            backgroundColor: AppColors.card,
-                            title: const Text('Senha muito curta', style: TextStyle(color: AppColors.danger)),
-                            content: const Text('A nova senha deve ter no mínimo 3 caracteres.', style: TextStyle(color: AppColors.textPrimary)),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctx),
-                                child: const Text('OK', style: TextStyle(color: AppColors.cta)),
-                              ),
-                            ],
-                          ),
-                        );
-                        return;
-                      }
-                    }
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('Alterações salvas com sucesso!'),
-                        backgroundColor: AppColors.accent,
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                    );
-                    Navigator.pop(context);
-                  },
+                  onPressed: _handleSave,
+                  loading: _isSaving,
                 ),
                 const SizedBox(height: 24),
                 OutlinedButton.icon(

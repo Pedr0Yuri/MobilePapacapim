@@ -23,6 +23,7 @@ class _FeedScreenState extends State<FeedScreen> {
     super.initState();
     _store.addListener(_onPostsChanged);
     ProfileStore.instance.addListener(_onPostsChanged);
+    _store.loadFeed();
   }
 
   @override
@@ -66,17 +67,53 @@ class _FeedScreenState extends State<FeedScreen> {
             ),
           ),
           Expanded(
-            child: TabBarView(
-              children: [
-                _buildPostList(allPosts),
-                _buildPostList(_store.followedFeedPosts),
-              ],
-            ),
+            child: _buildFeedBody(allPosts),
           ),
         ],
       ),
     );
   }
+
+  Widget _buildFeedBody(List<Map<String, dynamic>> allPosts) {
+    // Primeiro carregamento: mostra spinner enquanto não há nada pra exibir.
+    if (_store.isLoadingFeed && allPosts.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+ 
+    // Erro no primeiro carregamento (ex: sem internet, token inválido).
+    if (_store.feedError != null && allPosts.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.wifi_off_rounded, color: AppColors.textSecondary, size: 40),
+              const SizedBox(height: 12),
+              Text(
+                _store.feedError!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () => _store.loadFeed(),
+                child: const Text('Tentar novamente'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+ 
+    return TabBarView(
+      children: [
+        _buildPostList(allPosts),
+        _buildPostList(_store.followedFeedPosts),
+      ],
+    );
+  }
+ 
 
   Widget _buildPostList(List<Map<String, dynamic>> posts) {
     if (posts.isEmpty) {
