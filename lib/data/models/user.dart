@@ -1,4 +1,4 @@
-/// Representa um usuário retornado pela API Papacapim.
+// Representa um usuário retornado pela API Papacapim.
 
 class User {
   final String login;

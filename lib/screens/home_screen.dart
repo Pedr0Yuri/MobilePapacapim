@@ -6,6 +6,7 @@ import 'search_screen.dart';
 import '../widgets/app_bottom_nav_bar.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/new_post_modal.dart';
+import '../data/posts_store.dart';
 
 // Tela principal que serve como "Casca" (Shell) para as outras abas.
 class HomeScreen extends StatefulWidget {
@@ -18,11 +19,14 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final GlobalKey<ProfileScreenState> _profileKey = GlobalKey<ProfileScreenState>();
+  final GlobalKey<FeedScreenState> _feedKey = GlobalKey<FeedScreenState>();
+  final GlobalKey<SearchScreenState> _searchKey = GlobalKey<SearchScreenState>();
 
-  final List<Widget> _pages = const [
-    FeedScreen(),
-    SearchScreen(),
-    ProfileScreen(),
+  late final List<Widget> _pages = [
+    FeedScreen(key: _feedKey),
+    SearchScreen(key: _searchKey),
+    ProfileScreen(key: _profileKey),
   ];
 
   @override
@@ -37,6 +41,7 @@ class _HomeScreenState extends State<HomeScreen> {
         },
         onProfileTap: () {
           Navigator.of(context).pop();
+          _profileKey.currentState?.refreshAll();
           setState(() => _currentIndex = 2);
         },
       ),
@@ -50,14 +55,42 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => showNewPostModal(context),
+        onPressed: () async {
+          final result = await showNewPostModal(context);
+          if (result == true) {
+            if (_currentIndex == 0) {
+              PostsStore.instance.loadFeed();
+            } else if (_currentIndex == 2) {
+              _profileKey.currentState?.refreshAll();
+            }
+          }
+        },
         backgroundColor: AppColors.cta,
         shape: const CircleBorder(),
         child: const Icon(Icons.add_rounded, color: AppColors.white, size: 30),
       ),
       bottomNavigationBar: AppBottomNavBar(
         currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
+        onTap: (index) {
+          if (index == 0) {
+            if (_currentIndex == 0) {
+              _feedKey.currentState?.scrollToTop();
+            } else {
+              PostsStore.instance.loadFeed();
+            }
+          } else if (index == 1) {
+            if (_currentIndex == 1) {
+              _searchKey.currentState?.scrollToTop();
+            }
+          } else if (index == 2) {
+            if (_currentIndex == 2) {
+              _profileKey.currentState?.scrollToTop();
+            } else {
+              _profileKey.currentState?.refreshAll();
+            }
+          }
+          setState(() => _currentIndex = index);
+        },
       ),
     );
   }

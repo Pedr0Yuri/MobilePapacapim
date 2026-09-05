@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
-import '../data/profile_store.dart';
 import 'api_exception.dart';
 import 'repositories/posts_repository.dart';
+import 'repositories/users_repository.dart';
 import 'session_store.dart';
+import '../widgets/user_avatar.dart';
+import '../screens/post_detail_screen.dart';
 
-// Store de mock para publicações.
+// Store de publicações com integração à API.
 class PostsStore extends ChangeNotifier {
   PostsStore._();
 
   static final PostsStore instance = PostsStore._();
 
-  final PostsRepository _repository = PostsRepository.instance;
+  final PostsRepository _postsRepository = PostsRepository.instance;
+  final UsersRepository _usersRepository = UsersRepository.instance;
 
-  // Antes eram valores fixos (mockados). Agora refletem o usuário realmente autenticado, guardado no SessionStore após o login.
+  // Pegamos o usuário logado lá do SessionStore pra não precisar mockar mais.
   static String get currentUserName =>
-      SessionStore.instance.userLogin ?? '';
+      SessionStore.instance.name ?? SessionStore.instance.userLogin ?? '';
   static String get currentUserHandle =>
       '@${SessionStore.instance.userLogin ?? ''}';
  
@@ -30,28 +33,33 @@ class PostsStore extends ChangeNotifier {
  
   bool isFollowedAuthor(String handle) => followedHandles.contains(handle);
  
-  // Baseado nos ids retornados de verdade por GET /posts?feed=1 (ver loadFeed() abaixo) — não depende mais de followedHandles.
+  // Essa lista filtra o feed pegando só os ids que a API retornou pra aba de Seguindo, assim a gente aproveita o cache.
   List<Map<String, dynamic>> get followedFeedPosts => posts
       .where((post) => _followingPostIds.contains(post['id']))
+      .take(currentFeedPage * 12)
       .toList();
  
   List<Map<String, dynamic>> get recommendedFeedPosts => posts
       .where((post) => !_followingPostIds.contains(post['id']))
+      .take(currentFeedPage * 12)
       .toList();
  
-  // Antes era uma lista mockada fixa. Agora começa vazia e é preenchida por loadFeed(), com dados reais vindos da API.
   final List<Map<String, dynamic>> posts = [];
+ 
+  // Aqui a gente limita visualmente pra renderizar no máximo 12 posts de cada vez (currentFeedPage * 12). Se a API mandar 50 de uma vez, a gente não trava a home. O botão "Ver mais" vai liberando o resto.
+  List<Map<String, dynamic>> get visiblePosts => posts.take(currentFeedPage * 12).toList();
  
   // Carrega o feed a partir da API.
   Future<void> loadFeed() async {
     isLoadingFeed = true;
     feedError = null;
+    currentFeedPage = 1;
     notifyListeners();
  
     try {
       final results = await Future.wait([
-        _repository.getFeed(),
-        _repository.getFeed(followingOnly: true),
+        _postsRepository.getFeed(limit: 12),
+        _postsRepository.getFeed(followingOnly: true, limit: 12),
       ]);
       final allPosts = results[0];
       final followingPosts = results[1];
@@ -68,6 +76,15 @@ class PostsStore extends ChangeNotifier {
       posts
         ..clear()
         ..addAll(byId.values);
+
+      posts.sort((a, b) {
+        final dateA = a['createdAt'] != null ? DateTime.tryParse(a['createdAt'] as String) : null;
+        final dateB = b['createdAt'] != null ? DateTime.tryParse(b['createdAt'] as String) : null;
+        if (dateA != null && dateB != null) {
+          return dateB.compareTo(dateA);
+        }
+        return 0;
+      });
  
       _followingPostIds = followingPosts.map((p) => p.id.toString()).toSet();
     } on ApiException catch (e) {
@@ -77,12 +94,75 @@ class PostsStore extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  bool isLoadingMoreFeed = false;
+  int currentFeedPage = 1;
+
+  Future<void> loadMoreFeed() async {
+    if (isLoadingMoreFeed) return;
+    isLoadingMoreFeed = true;
+    notifyListeners();
+ 
+    try {
+      currentFeedPage++;
+      final results = await Future.wait([
+        _postsRepository.getFeed(page: currentFeedPage, limit: 12),
+        _postsRepository.getFeed(followingOnly: true, page: currentFeedPage, limit: 12),
+      ]);
+      final allPosts = results[0];
+      final followingPosts = results[1];
+ 
+      if (allPosts.isEmpty && followingPosts.isEmpty) {
+        currentFeedPage--; // Volta a página se a API não mandar mais nada
+        return;
+      }
+
+      final byId = <String, Map<String, dynamic>>{
+        for (final post in posts) post['id'].toString(): post,
+      };
+      for (final post in allPosts) {
+        byId.putIfAbsent(post.id.toString(), () => post.toUiMap());
+      }
+      for (final post in followingPosts) {
+        byId.putIfAbsent(post.id.toString(), () => post.toUiMap());
+      }
+ 
+      posts
+        ..clear()
+        ..addAll(byId.values);
+
+      posts.sort((a, b) {
+        final dateA = a['createdAt'] != null ? DateTime.tryParse(a['createdAt'] as String) : null;
+        final dateB = b['createdAt'] != null ? DateTime.tryParse(b['createdAt'] as String) : null;
+        if (dateA != null && dateB != null) {
+          return dateB.compareTo(dateA);
+        }
+        return 0;
+      });
+ 
+      _followingPostIds.addAll(followingPosts.map((p) => p.id.toString()));
+    } on ApiException {
+      currentFeedPage--;
+    } finally {
+      isLoadingMoreFeed = false;
+      notifyListeners();
+    }
+  }
  
   List<Map<String, dynamic>> get ownPosts =>
       posts.where((post) => post['handle'] == currentUserHandle).toList();
  
+  // Criei esse cache isolado pra consertar aquele erro de abrir um post pela tela de pesquisa/perfil e ele não carregar os dados completos.
+  final Map<String, Map<String, dynamic>> _isolatedPosts = {};
+
+  void cacheIsolatedPost(Map<String, dynamic> post) {
+    if (_findPostOrReply(post['id'], posts) == null) {
+      _isolatedPosts[post['id']] = post;
+    }
+  }
+
   Map<String, dynamic>? findPost(String id) {
-    return _findPostOrReply(id, posts);
+    return _findPostOrReply(id, posts) ?? _findPostOrReply(id, _isolatedPosts.values.toList());
   }
  
   Map<String, dynamic>? _findPostOrReply(String id, List<Map<String, dynamic>> currentList) {
@@ -96,25 +176,24 @@ class PostsStore extends ChangeNotifier {
     return null;
   }
  
-  // Adiciona novo post no topo do feed (inserção mockada).
-  void addPost(String content) {
-    posts.insert(0, {
-      'id': DateTime.now().millisecondsSinceEpoch.toString(),
-      'name': currentUserName,
-      'handle': currentUserHandle,
-      'time': 'agora',
-      'content': content,
-      'likes': 0,
-      'replies': 0,
-      'liked': false,
-      'replyList': <Map<String, dynamic>>[],
-    });
-    notifyListeners();
+  Future<void> addPost(String content) async {
+    try {
+      final newPost = await _postsRepository.createPost(content);
+      posts.insert(0, newPost.toUiMap());
+      notifyListeners();
+    } on ApiException {
+      rethrow;
+    }
   }
  
-  void deletePost(String id) {
-    posts.removeWhere((post) => post['id'] == id);
-    notifyListeners();
+  Future<void> deletePost(String id) async {
+    try {
+      await _postsRepository.deletePost(id);
+      posts.removeWhere((post) => post['id'] == id);
+      notifyListeners();
+    } on ApiException {
+      rethrow;
+    }
   }
  
   void deleteReply(String id) {
@@ -139,50 +218,95 @@ class PostsStore extends ChangeNotifier {
     return false;
   }
  
-  // Alterna o estado de curtida do post, refletindo em todo o app.
-  void toggleLike(String id) {
+  Future<void> toggleLike(String id) async {
     final post = findPost(id);
     if (post == null) return;
  
     final liked = post['liked'] as bool;
+
+    // Atualiza otimisticamente a UI antes da resposta da API.
     post['liked'] = !liked;
     post['likes'] = (post['likes'] as int) + (liked ? -1 : 1);
     notifyListeners();
+
+    try {
+      if (liked) {
+        await _postsRepository.unlikePost(id);
+      } else {
+        await _postsRepository.likePost(id);
+      }
+    } on ApiException {
+      // Reverte em caso de erro.
+      post['liked'] = liked;
+      post['likes'] = (post['likes'] as int) + (liked ? 1 : -1);
+      notifyListeners();
+    }
   }
  
-  void toggleFollow(String handle) {
-    if (followedHandles.contains(handle)) {
+  Future<void> toggleFollow(String handle) async {
+    // Remove o @ do handle para obter o login.
+    final login = handle.startsWith('@') ? handle.substring(1) : handle;
+    final wasFollowing = followedHandles.contains(handle);
+
+    // Atualiza otimisticamente.
+    if (wasFollowing) {
       followedHandles.remove(handle);
     } else {
       followedHandles.add(handle);
     }
     notifyListeners();
+
+    try {
+      if (wasFollowing) {
+        await _usersRepository.unfollowUser(login);
+      } else {
+        await _usersRepository.followUser(login);
+      }
+    } on ApiException {
+      // Reverte em caso de erro.
+      if (wasFollowing) {
+        followedHandles.add(handle);
+      } else {
+        followedHandles.remove(handle);
+      }
+      notifyListeners();
+    }
   }
  
-  void addReply(String id, String content) {
-    final post = findPost(id);
-    if (post == null) return;
- 
-    final replyList = post['replyList'] as List<Map<String, dynamic>>;
-    replyList.insert(0, {
-      'id': 'reply_${DateTime.now().millisecondsSinceEpoch}',
-      'name': currentUserName,
-      'handle': currentUserHandle,
-      'content': content,
-      'time': 'agora',
-      'likes': 0,
-      'liked': false,
-      'replies': 0,
-      'replyList': <Map<String, dynamic>>[],
-    });
-    post['replies'] = (post['replies'] as int) + 1;
-    notifyListeners();
+  Future<void> addReply(String id, String content) async {
+    try {
+      final reply = await _postsRepository.createReply(id, content);
+      final post = findPost(id);
+      if (post != null) {
+        final replyList = post['replyList'] as List<Map<String, dynamic>>;
+        replyList.insert(0, reply.toUiMap());
+        post['replies'] = (post['replies'] as int) + 1;
+        notifyListeners();
+      }
+    } on ApiException {
+      rethrow;
+    }
+  }
+
+  Future<void> loadReplies(String postId) async {
+    try {
+      final replies = await _postsRepository.getReplies(postId);
+      final post = findPost(postId);
+      if (post != null) {
+        final replyList = post['replyList'] as List<Map<String, dynamic>>;
+        replyList.clear();
+        replyList.addAll(replies.map((r) => r.toUiMap()));
+        notifyListeners();
+      }
+    } on ApiException {
+      // Ignora silenciosamente, replies continuam vazias.
+    }
   }
 }
  
 // Navega para a tela de resposta em modo fullscreen para evitar conflitos de teclado.
-void showPostReplySheet(BuildContext context, String postId, {String? initialText}) {
-  Navigator.of(context, rootNavigator: true).push(
+Future<bool?> showPostReplySheet(BuildContext context, String postId, {String? initialText}) {
+  return Navigator.of(context, rootNavigator: true).push<bool>(
     MaterialPageRoute(
       fullscreenDialog: true,
       builder: (_) => _ReplyScreen(postId: postId, initialText: initialText),
@@ -201,6 +325,7 @@ class _ReplyScreen extends StatefulWidget {
  
 class _ReplyScreenState extends State<_ReplyScreen> {
   late final TextEditingController _controller;
+  bool _isSending = false;
  
   @override
   void initState() {
@@ -212,6 +337,29 @@ class _ReplyScreenState extends State<_ReplyScreen> {
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleSend() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+
+    setState(() => _isSending = true);
+    try {
+      await PostsStore.instance.addReply(widget.postId, text);
+      if (mounted) Navigator.of(context, rootNavigator: true).pop(true);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
   }
 
   @override
@@ -238,13 +386,7 @@ class _ReplyScreenState extends State<_ReplyScreen> {
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: ElevatedButton(
-              onPressed: () {
-                final text = _controller.text.trim();
-                if (text.isNotEmpty) {
-                  PostsStore.instance.addReply(widget.postId, text);
-                }
-                Navigator.pop(context);
-              },
+              onPressed: _isSending ? null : _handleSend,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.cta,
                 foregroundColor: AppColors.white,
@@ -254,7 +396,12 @@ class _ReplyScreenState extends State<_ReplyScreen> {
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               ),
-              child: const Text('Enviar', style: TextStyle(fontWeight: FontWeight.w600)),
+              child: _isSending
+                  ? const SizedBox(
+                      width: 18, height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(AppColors.white)),
+                    )
+                  : const Text('Enviar', style: TextStyle(fontWeight: FontWeight.w600)),
             ),
           ),
         ],
@@ -264,18 +411,9 @@ class _ReplyScreenState extends State<_ReplyScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Builder(
-              builder: (context) {
-                final img = ProfileStore.instance.profileImageProvider;
-                return CircleAvatar(
-                  radius: 21,
-                  backgroundColor: AppColors.secondary.withValues(alpha: 0.15),
-                  backgroundImage: img,
-                  child: img == null
-                      ? Icon(Icons.person, color: AppColors.secondary.withValues(alpha: 0.5), size: 24)
-                      : null,
-                );
-              },
+            UserAvatar(
+              handle: PostsStore.currentUserHandle,
+              radius: 21,
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -305,8 +443,9 @@ class _ReplyScreenState extends State<_ReplyScreen> {
 class PostReplyList extends StatelessWidget {
   final List<Map<String, dynamic>> replies;
   final int depth;
+  final VoidCallback? onReplyAdded;
 
-  const PostReplyList({super.key, required this.replies, this.depth = 0});
+  const PostReplyList({super.key, required this.replies, this.depth = 0, this.onReplyAdded});
 
   @override
   Widget build(BuildContext context) {
@@ -318,38 +457,36 @@ class PostReplyList extends StatelessWidget {
         if (depth == 0) const SizedBox(height: 14),
         ...replies.map(
           (reply) {
-            final hasNestedReplies = (reply['replyList'] as List?)?.isNotEmpty ?? false;
-            
             // Limita a escadinha a 3 níveis para não dar overflow na tela
             return Padding(
               padding: EdgeInsets.only(left: depth == 0 ? 0 : (depth <= 3 ? 16.0 : 0.0)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.inputBg.withValues(alpha: 0.65),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Row(
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => PostDetailScreen(postId: reply['id']),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.inputBg.withValues(alpha: 0.65),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Builder(
-                          builder: (context) {
-                            final isMe = reply['handle'] == PostsStore.currentUserHandle;
-                            final img = isMe ? ProfileStore.instance.profileImageProvider : null;
-                            return CircleAvatar(
-                              radius: 16,
-                              backgroundColor: AppColors.secondary.withValues(alpha: 0.15),
-                              backgroundImage: img,
-                              child: img == null
-                                  ? Icon(Icons.person, color: AppColors.secondary.withValues(alpha: 0.5), size: 18)
-                                  : null,
-                            );
-                          },
+                        UserAvatar(
+                          imageUrl: reply['profileImage'] as String?,
+                          handle: reply['handle'] as String?,
+                          radius: 16,
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -404,9 +541,13 @@ class PostReplyList extends StatelessWidget {
                                                 actions: [
                                                   TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
                                                   TextButton(
-                                                    onPressed: () { 
-                                                      PostsStore.instance.deleteReply(reply['id']); 
-                                                      Navigator.pop(ctx); 
+                                                    onPressed: () async {
+                                                      try {
+                                                        await PostsStore.instance.deletePost(reply['id']);
+                                                      } on ApiException {
+                                                        // Erro silenciado — a UI já removeu
+                                                      }
+                                                      if (ctx.mounted) Navigator.pop(ctx);
                                                     }, 
                                                     child: const Text('Excluir', style: TextStyle(color: AppColors.danger))
                                                   ),
@@ -462,9 +603,16 @@ class PostReplyList extends StatelessWidget {
                                     ),
                                   ),
                                   const SizedBox(width: 16),
-                                  GestureDetector(
-                                    onTap: () => showPostReplySheet(context, reply['id']),
-                                    child: Row(
+                                    GestureDetector(
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => PostDetailScreen(postId: reply['id']),
+                                          ),
+                                        );
+                                      },
+                                      child: Row(
                                       children: [
                                         const Icon(Icons.chat_bubble_outline_rounded, size: 16, color: AppColors.textSecondary),
                                         const SizedBox(width: 4),
@@ -483,14 +631,13 @@ class PostReplyList extends StatelessWidget {
                       ],
                     ),
                   ),
-                  if (hasNestedReplies)
-                    PostReplyList(replies: reply['replyList'], depth: depth + 1),
+                ),
                 ],
               ),
             );
           },
         ),
-      ],
-    );
+        ],
+      );
+    }
   }
-}

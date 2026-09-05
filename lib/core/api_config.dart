@@ -1,12 +1,27 @@
-// Configurações globais de acesso à API Papacapim.
-
 class ApiConfig {
-  // URL base da API. Todas as chamadas HTTP usam este endereço como prefixo.
-  // Ex: baseUrl + '/sessions' = https://api.papacapim.just.pro.br/sessions
   static const String baseUrl = 'https://api.papacapim.just.pro.br';
-
-  // Nome do cabeçalho HTTP usado para autenticação, conforme a documentação
-  // da API: todas as requisições autenticadas devem enviar o token de
-  // sessão neste header.
   static const String sessionTokenHeader = 'x-session-token';
+
+  static String getProfileImageUrl(String imagePath) {
+    var path = imagePath.trim();
+    if (path.isEmpty) return '';
+
+    // Se já é URL completa, apenas garante HTTPS
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return path.replaceFirst('http://', 'https://');
+    }
+
+    // Se é apenas o UUID (ex: "fa87ebb3-...webp"), monta a URL completa
+    if (!path.contains('/image/profile/')) {
+      // Remove '/' inicial se tiver
+      path = path.replaceFirst(RegExp(r'^/'), '');
+      return '$baseUrl/image/profile/$path';
+    }
+
+    // Se já contém '/image/profile' mas não começa com http
+    if (!path.startsWith('/')) {
+      path = '/$path';
+    }
+    return '$baseUrl$path';
+  }
 }

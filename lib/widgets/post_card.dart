@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../data/posts_store.dart';
-import '../data/profile_store.dart';
+import 'user_avatar.dart';
 
 /// Widget que exibe uma postagem.
 class PostCard extends StatelessWidget {
@@ -72,30 +72,10 @@ class PostCard extends StatelessWidget {
           onTap: onProfileTap,
           child: Row(
             children: [
-              Builder(
-                builder: (context) {
-                  final isMe = post['handle'] == PostsStore.currentUserHandle;
-                  final networkUrl = post['profileImage'] as String?;
-                  final fallbackNetworkImage = (networkUrl != null && networkUrl.isNotEmpty)
-                      ? NetworkImage(networkUrl)
-                      : null;
-                  final img = isMe
-                      ? (ProfileStore.instance.profileImageProvider ?? fallbackNetworkImage)
-                      : fallbackNetworkImage;
-
-                  return CircleAvatar(
-                    radius: 21,
-                    backgroundColor: AppColors.secondary.withValues(alpha: 0.15),
-                    backgroundImage: img,
-                    child: img == null
-                        ? Icon(
-                            Icons.person,
-                            color: AppColors.secondary.withValues(alpha: 0.5),
-                            size: 24,
-                          )
-                        : null,
-                  );
-                },
+              UserAvatar(
+                imageUrl: post['profileImage'] as String?,
+                handle: post['handle'] as String?,
+                radius: 21,
               ),
               const SizedBox(width: 12),
               Column(

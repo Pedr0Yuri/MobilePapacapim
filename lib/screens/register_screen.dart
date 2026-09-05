@@ -150,7 +150,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const SizedBox(height: 18),
                 AppTextField(label: 'Confirmação de Senha', icon: Icons.lock_person_outlined, obscureText: true, controller: _confirmPasswordController),
                 const SizedBox(height: 36),
-                AppButton(label: 'Cadastrar', onPressed: _handleRegister),
+                AppButton(label: 'Cadastrar', loading: _isLoading, onPressed: _handleRegister),
                 const SizedBox(height: 20),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,

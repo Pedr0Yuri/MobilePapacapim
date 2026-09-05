@@ -9,6 +9,7 @@ import '../data/repositories/posts_repository.dart';
 import '../data/repositories/users_repository.dart';
 import '../widgets/app_top_bar.dart';
 import '../widgets/post_card.dart';
+import '../widgets/user_avatar.dart';
 import 'profile_screen.dart';
 import 'post_detail_screen.dart' as import_detail;
 
@@ -17,10 +18,10 @@ class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
 
   @override
-  State<SearchScreen> createState() => _SearchScreenState();
+  State<SearchScreen> createState() => SearchScreenState();
 }
 
-class _SearchScreenState extends State<SearchScreen>
+class SearchScreenState extends State<SearchScreen>
     with SingleTickerProviderStateMixin {
   String query = '';
   bool showOnlyFollowing = false;
@@ -33,11 +34,26 @@ class _SearchScreenState extends State<SearchScreen>
  
   List<User> _users = [];
   bool _isLoadingUsers = false;
+  bool _isLoadingMoreUsers = false;
+  int _currentUsersPage = 1;
   String? _usersError;
  
   List<Map<String, dynamic>> _posts = [];
   bool _isLoadingPosts = false;
+  bool _isLoadingMorePosts = false;
+  int _currentPostsPage = 1;
   String? _postsError;
+
+  final ScrollController _usersScrollController = ScrollController();
+  final ScrollController _postsScrollController = ScrollController();
+
+  void scrollToTop() {
+    if (_tabController.index == 0 && _usersScrollController.hasClients) {
+      _usersScrollController.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+    } else if (_tabController.index == 1 && _postsScrollController.hasClients) {
+      _postsScrollController.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+    }
+  }
 
   @override
   void initState() {
@@ -56,6 +72,8 @@ class _SearchScreenState extends State<SearchScreen>
   @override
   void dispose() {
     _debounce?.cancel();
+    _usersScrollController.dispose();
+    _postsScrollController.dispose();
     _store.removeListener(_onDataChanged);
     ProfileStore.instance.removeListener(_onDataChanged);
     _tabController.dispose();
@@ -71,11 +89,11 @@ class _SearchScreenState extends State<SearchScreen>
     });
   }
  
-  // Endpoint: GET /users?search=termo
   Future<void> _searchUsers() async {
     setState(() {
       _isLoadingUsers = true;
       _usersError = null;
+      _currentUsersPage = 1;
     });
     try {
       final results = await _usersRepository.searchUsers(search: query);
@@ -88,25 +106,82 @@ class _SearchScreenState extends State<SearchScreen>
       if (mounted) setState(() => _isLoadingUsers = false);
     }
   }
+
+  Future<void> _loadMoreUsers() async {
+    if (_isLoadingMoreUsers) return;
+    setState(() => _isLoadingMoreUsers = true);
+
+    try {
+      _currentUsersPage++;
+      final results = await _usersRepository.searchUsers(search: query, page: _currentUsersPage);
+      if (!mounted) return;
+
+      if (results.isEmpty) {
+        _currentUsersPage--;
+        return;
+      }
+
+      setState(() {
+        _users.addAll(results);
+      });
+    } on ApiException {
+      _currentUsersPage--;
+    } finally {
+      if (mounted) setState(() => _isLoadingMoreUsers = false);
+    }
+  }
  
-  // Endpoint: GET /posts?search=termo (combinado com feed=1 quando o usuário liga o "Apenas quem eu sigo").
   Future<void> _searchPosts() async {
     setState(() {
       _isLoadingPosts = true;
       _postsError = null;
+      _currentPostsPage = 1;
     });
     try {
       final results = await _postsRepository.getFeed(
         followingOnly: showOnlyFollowing,
         search: query,
+        limit: 12,
       );
       if (!mounted) return;
-      setState(() => _posts = results.map((p) => p.toUiMap()).toList());
+      setState(() {
+        _posts = results.map((p) => p.toUiMap()).toList();
+      });
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() => _postsError = e.message);
     } finally {
       if (mounted) setState(() => _isLoadingPosts = false);
+    }
+  }
+
+  // Controla a página atual pra fazer a paginação do botão "Ver mais" na tela de busca.
+  Future<void> _loadMorePosts() async {
+    if (_isLoadingMorePosts) return;
+    setState(() => _isLoadingMorePosts = true);
+    
+    try {
+      _currentPostsPage++;
+      final results = await _postsRepository.getFeed(
+        followingOnly: showOnlyFollowing,
+        search: query,
+        page: _currentPostsPage,
+        limit: 12,
+      );
+      if (!mounted) return;
+
+      if (results.isEmpty) {
+        _currentPostsPage--;
+        return;
+      }
+
+      setState(() {
+        _posts.addAll(results.map((p) => p.toUiMap()));
+      });
+    } on ApiException {
+      _currentPostsPage--;
+    } finally {
+      if (mounted) setState(() => _isLoadingMorePosts = false);
     }
   }
  
@@ -194,31 +269,37 @@ class _SearchScreenState extends State<SearchScreen>
       );
     }
     return ListView.separated(
-      itemCount: _users.length,
-      separatorBuilder: (_, __) => Divider(
-        height: 1,
-        color: AppColors.inputBorder.withValues(alpha: 0.3),
-      ),
+      controller: _usersScrollController,
+      physics: const AlwaysScrollableScrollPhysics(),
+      itemCount: _users.length + 1,
+      separatorBuilder: (_, i) {
+        if (i == _users.length - 1) return const SizedBox.shrink(); // Hide line above 'Ver mais'
+        return Divider(
+          height: 1,
+          color: AppColors.inputBorder.withValues(alpha: 0.3),
+        );
+      },
       itemBuilder: (context, i) {
+        if (i == _users.length) {
+          return Padding(
+            padding: const EdgeInsets.only(top: 16, bottom: 24),
+            child: _isLoadingMoreUsers
+                ? const Center(child: CircularProgressIndicator())
+                : TextButton(
+                    onPressed: _loadMoreUsers,
+                    child: const Text('Ver mais', style: TextStyle(color: AppColors.cta)),
+                  ),
+          );
+        }
+
         final user = _users[i];
         final handle = '@${user.login}';
         return ListTile(
           onTap: () => _navigateToProfile(user.name, handle),
-          leading: CircleAvatar(
-            backgroundColor: AppColors.secondary.withValues(alpha: 0.15),
-            child: Builder(
-              builder: (context) {
-                final isMe = handle == PostsStore.currentUserHandle;
-                final img = isMe
-                    ? ProfileStore.instance.profileImageProvider
-                    : (user.profileImage != null && user.profileImage!.isNotEmpty
-                        ? NetworkImage(user.profileImage!)
-                        : null);
-                return img == null
-                    ? Icon(Icons.person, color: AppColors.secondary.withValues(alpha: 0.5), size: 20)
-                    : CircleAvatar(backgroundImage: img, radius: 20);
-              },
-            ),
+          leading: UserAvatar(
+            imageUrl: user.profileImage,
+            handle: handle,
+            radius: 20,
           ),
           title: Text(
             user.name,
@@ -277,9 +358,23 @@ class _SearchScreenState extends State<SearchScreen>
       );
     }
     return ListView.builder(
+      controller: _postsScrollController,
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      itemCount: _posts.length,
+      itemCount: _posts.length + 1,
       itemBuilder: (context, i) {
+        if (i == _posts.length) {
+          return Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 24),
+            child: _isLoadingMorePosts
+                ? const Center(child: CircularProgressIndicator())
+                : TextButton(
+                    onPressed: _loadMorePosts,
+                    child: const Text('Ver mais', style: TextStyle(color: AppColors.cta)),
+                  ),
+          );
+        }
+
         final post = _posts[i];
         return Padding(
           padding: const EdgeInsets.only(bottom: 16),
@@ -287,6 +382,7 @@ class _SearchScreenState extends State<SearchScreen>
             post: post,
             isSimplified: true, // Hide action bar
             onTap: () {
+              PostsStore.instance.cacheIsolatedPost(post);
               Navigator.of(context, rootNavigator: true).push(
                 MaterialPageRoute(
                   builder: (_) => import_detail.PostDetailScreen(

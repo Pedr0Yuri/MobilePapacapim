@@ -11,6 +11,7 @@ import '../data/posts_store.dart';
 import '../data/profile_store.dart';
 import '../data/repositories/auth_repository.dart';
 import '../data/session_store.dart';
+import '../core/api_config.dart';
 import '../widgets/app_text_field.dart';
 import '../widgets/app_button.dart';
 
@@ -64,15 +65,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _nameController.text = user.name;
       _profileStore.setNetworkProfileImageUrl(user.profileImage);
     } on ApiException {
+      // Falha silenciosa: apenas continua com o perfil vazio/desatualizado.
     } finally {
       if (mounted) setState(() => _isLoadingProfile = false);
     }
   }
- 
-  void _setLocalImage(Uint8List bytes) {
-    _profileStore.setLocalProfileImageBytes(bytes);
-    _imageChanged = true;
-  }
+
 
   Future<void> _pickProfileImage(ImageSource source) async {
     try {
@@ -179,6 +177,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       } catch (e) {
                         _profileStore.setLocalProfileImageBytes(bytes);
                       }
+                      _imageChanged = true;
                       if (ctx.mounted) Navigator.pop(ctx);
                     },
                     style: ElevatedButton.styleFrom(
@@ -246,14 +245,45 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Widget _buildProfileAvatar() {
-    final imageProvider = _profileStore.profileImageProvider;
+    final localBytes = _profileStore.localProfileImageBytes;
+    final networkUrl = _profileStore.networkProfileImageUrl;
+
+    // Prioriza imagem local (recém-selecionada/cortada).
+    if (localBytes != null) {
+      return ClipOval(
+        child: SizedBox(
+          width: 104,
+          height: 104,
+          child: Image.memory(localBytes, fit: BoxFit.cover),
+        ),
+      );
+    }
+
+    // Fallback para URL de rede (usa Image.network com errorBuilder
+    // para lidar com .webp e erros de carregamento).
+    if (networkUrl != null && networkUrl.isNotEmpty) {
+      final absoluteUrl = ApiConfig.getProfileImageUrl(networkUrl);
+      return ClipOval(
+        child: SizedBox(
+          width: 104,
+          height: 104,
+          child: Image.network(
+            absoluteUrl,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(
+              color: AppColors.inputBg,
+              child: Icon(Icons.person, size: 48, color: AppColors.textSecondary.withValues(alpha: 0.5)),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Sem imagem nenhuma.
     return CircleAvatar(
       radius: 52,
       backgroundColor: AppColors.inputBg,
-      backgroundImage: imageProvider,
-      child: imageProvider == null
-          ? Icon(Icons.person, size: 48, color: AppColors.textSecondary.withValues(alpha: 0.5))
-          : null,
+      child: Icon(Icons.person, size: 48, color: AppColors.textSecondary.withValues(alpha: 0.5)),
     );
   }
 
@@ -308,7 +338,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       }
  
       // Chama PATCH /users/me na API.
-      await AuthRepository.instance.updateUser(
+      final updatedUser = await AuthRepository.instance.updateUser(
         name: name,
         password: isChangingPassword ? pass : null,
         passwordConfirmation: isChangingPassword ? confirm : null,
@@ -316,6 +346,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       );
  
       if (!mounted) return;
+
+      // Atualiza o SessionStore e ProfileStore com os novos dados
+      SessionStore.instance.updateProfile(
+        name: updatedUser.name,
+        profileImage: updatedUser.profileImage,
+      );
+      if (updatedUser.profileImage != null) {
+        _profileStore.setNetworkProfileImageUrl(updatedUser.profileImage!);
+      }
  
       if (isChangingPassword) {
         // A API invalida todas as sessões (inclusive a nossa) ao trocar a senha
@@ -420,9 +459,28 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         actions: [
                           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: AppColors.textSecondary))),
                           TextButton(
-                            onPressed: () {
+                            onPressed: () async {
                               Navigator.pop(ctx);
-                              Navigator.of(context, rootNavigator: true).pushReplacementNamed('/login');
+                              setState(() => _isSaving = true);
+                              try {
+                                await AuthRepository.instance.deleteAccount();
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: const Text('Conta excluída com sucesso.'),
+                                    backgroundColor: AppColors.accent,
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                  ),
+                                );
+                                Navigator.of(context, rootNavigator: true)
+                                    .pushNamedAndRemoveUntil('/login', (route) => false);
+                              } on ApiException catch (e) {
+                                if (!context.mounted) return;
+                                _showDialog('Não foi possível excluir', e.message);
+                              } finally {
+                                if (mounted) setState(() => _isSaving = false);
+                              }
                             },
                             child: const Text('Excluir', style: TextStyle(color: AppColors.danger)),
                           ),

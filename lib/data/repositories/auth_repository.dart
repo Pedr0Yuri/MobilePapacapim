@@ -10,6 +10,7 @@ class AuthRepository {
 
   /// Cria uma nova conta.
   /// Endpoint: POST /users (único endpoint que não exige autenticação).
+  /// Body: { "user": { "login": ..., "name": ..., "password": ..., "password_confirmation": ... } }
   Future<User> createUser({
     required String login,
     required String name,
@@ -19,10 +20,10 @@ class AuthRepository {
     final json = await _client.post(
       '/users',
       body: {
-          'login': login,
-          'name': name,
-          'password': password,
-          'password_confirmation': passwordConfirmation,
+        'login': login,
+        'name': name,
+        'password': password,
+        'password_confirmation': passwordConfirmation,
       },
     );
     return User.fromJson(json as Map<String, dynamic>);
@@ -48,30 +49,50 @@ class AuthRepository {
       userLogin: map['user_login'] as String,
     );
   }
-  /// Busca os dados do usuário autenticado.
 
+  /// Busca os dados do usuário autenticado.
+  /// Endpoint: GET /users/me
   Future<User> getCurrentUser() async {
     final json = await _client.get('/users/me');
     return User.fromJson(json as Map<String, dynamic>);
   }
  
   /// Altera dados do usuário autenticado (nome, senha e/ou foto).
- 
+  /// Endpoint: PATCH /users/me
+  /// Body: { "user": { ... } }
   Future<User> updateUser({
     String? name,
     String? password,
     String? passwordConfirmation,
     String? imageDataBase64,
   }) async {
-    final body = <String, dynamic>{};
-    if (name != null && name.isNotEmpty) body['name'] = name;
+    final userData = <String, dynamic>{};
+    if (name != null && name.isNotEmpty) userData['name'] = name;
     if (password != null && password.isNotEmpty) {
-      body['password'] = password;
-      body['password_confirmation'] = passwordConfirmation;
+      userData['password'] = password;
+      userData['password_confirmation'] = passwordConfirmation;
     }
-    if (imageDataBase64 != null) body['image_data'] = imageDataBase64;
+    if (imageDataBase64 != null) userData['image_data'] = imageDataBase64;
  
-    final json = await _client.patch('/users/me', body: body);
+    final json = await _client.patch('/users/me', body: {'user': userData});
     return User.fromJson(json as Map<String, dynamic>);
+  }
+
+  /// Encerra a sessão no servidor.
+  /// Endpoint: DELETE /sessions/1
+  Future<void> logout() async {
+    try {
+      await _client.delete('/sessions/1');
+    } catch (_) {
+      // Mesmo que falhe no servidor, limpamos a sessão local.
+    }
+    await SessionStore.instance.clear();
+  }
+
+  /// Exclui a conta do usuário autenticado.
+  /// Endpoint: DELETE /users/me
+  Future<void> deleteAccount() async {
+    await _client.delete('/users/me');
+    await SessionStore.instance.clear();
   }
 }

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
-import '../data/profile_store.dart';
+import '../data/posts_store.dart';
+import '../data/repositories/auth_repository.dart';
+import '../data/session_store.dart';
+import 'user_avatar.dart';
 
 // Drawer menu.
 class AppDrawer extends StatelessWidget {
@@ -15,6 +18,9 @@ class AppDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final displayName = SessionStore.instance.name ?? SessionStore.instance.userLogin ?? '';
+    final displayHandle = PostsStore.currentUserHandle;
+
     return Drawer(
       backgroundColor: AppColors.card,
       shape: const RoundedRectangleBorder(
@@ -57,32 +63,19 @@ class AppDrawer extends StatelessWidget {
                             width: 2,
                           ),
                         ),
-                        child: Builder(
-                          builder: (context) {
-                            final img = ProfileStore.instance.profileImageProvider;
-                            return CircleAvatar(
-                              backgroundColor: Colors.transparent,
-                              backgroundImage: img,
-                              child: img == null
-                                  ? const Center(
-                                      child: Icon(
-                                        Icons.person,
-                                        color: AppColors.white,
-                                        size: 28,
-                                      ),
-                                    )
-                                  : null,
-                            );
-                          },
+                        child: UserAvatar(
+                          handle: displayHandle,
+                          imageUrl: SessionStore.instance.profileImage,
+                          radius: 24,
                         ),
                       ),
                       const Spacer(),
                     ],
                   ),
                   const SizedBox(height: 14),
-                  const Text(
-                    'Pedr0Yuri',
-                    style: TextStyle(
+                  Text(
+                    displayName,
+                    style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
                       color: AppColors.white,
@@ -90,7 +83,7 @@ class AppDrawer extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '@Pedr0Yuri',
+                    displayHandle,
                     style: TextStyle(
                       fontSize: 14,
                       color: AppColors.beige.withValues(alpha: 0.8),
@@ -120,7 +113,11 @@ class AppDrawer extends StatelessWidget {
               Icons.logout_rounded,
               'Sair',
               AppColors.danger,
-              onLogout,
+              () async {
+                // Encerra sessão na API (DELETE /sessions/1) e limpa token local.
+                await AuthRepository.instance.logout();
+                onLogout();
+              },
             ),
             const SizedBox(height: 16),
           ],

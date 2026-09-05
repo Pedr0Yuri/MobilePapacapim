@@ -38,7 +38,7 @@ class Post {
     );
   }
 
-  /// Converte para o Map<String, dynamic> que as telas e widgets da Parte 1
+  /// Converte para o `Map<String, dynamic>` que as telas e widgets da Parte 1
   /// (PostCard, PostDetailScreen, PostsStore etc.) já sabem exibir.
   Map<String, dynamic> toUiMap() {
     return {
@@ -54,6 +54,7 @@ class Post {
       'liked': youLiked,
       // As respostas de um post específico são carregadas à parte, via GET /posts/{id}/replies (funcionalidade "Responder post", ainda não implementada). Por enquanto começa vazia.
       'replyList': <Map<String, dynamic>>[],
+      'createdAt': createdAt?.toIso8601String(),
     };
   }
 }
