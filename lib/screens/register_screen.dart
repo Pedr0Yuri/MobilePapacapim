@@ -69,7 +69,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Chama POST /users na API. Se dar certo, a conta já existe no back-end e o usuário pode fazer login normalmente.
+      // Cria a conta no backend. Em caso de sucesso, o usuário poderá fazer login.
       await AuthRepository.instance.createUser(
         login: _loginController.text.trim(),
         name: _nameController.text.trim(),
@@ -91,7 +91,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       // Sucesso -> Login
       Navigator.pushReplacementNamed(context, '/login');
     } on ApiException catch (e) {
-      // Erro vindo da API (ex: login já em uso, senha muito curta para o back-end, etc.). Mostramos a mensagem que a API retornou.
+      // Em caso de erro (login em uso, senha curta, etc), exibe a mensagem retornada.
       if (!mounted) return;
       _showErrorDialog(e.message);
     } finally {

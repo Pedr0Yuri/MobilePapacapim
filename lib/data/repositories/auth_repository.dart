@@ -1,6 +1,7 @@
 import '../api_cliente.dart';
 import '../models/user.dart';
 import '../session_store.dart';
+import '../profile_store.dart';
 
 class AuthRepository {
   AuthRepository._();
@@ -87,6 +88,7 @@ class AuthRepository {
       // Mesmo que falhe no servidor, limpamos a sessão local.
     }
     await SessionStore.instance.clear();
+    ProfileStore.instance.clearProfileImage();
   }
 
   /// Exclui a conta do usuário autenticado.
@@ -94,5 +96,6 @@ class AuthRepository {
   Future<void> deleteAccount() async {
     await _client.delete('/users/me');
     await SessionStore.instance.clear();
+    ProfileStore.instance.clearProfileImage();
   }
 }

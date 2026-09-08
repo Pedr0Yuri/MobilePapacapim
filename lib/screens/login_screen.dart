@@ -39,20 +39,11 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Chama POST /sessions. Se der certo, o AuthRepository já guarda o
-      // token no SessionStore — a partir daqui o app está "autenticado"
-      // e todas as próximas requisições incluem o header x-session-token.
+      // Autentica o usuário e salva o token na sessão.
       await AuthRepository.instance.login(login: login, password: password);
  
-      // Busca nome completo e foto de perfil reais (GET /users/me) logo
-      // após o login, e já popula o SessionStore/ProfileStore. Fazemos
-      // isso AQUI (e não só quando o usuário abre Editar Perfil) pra que
-      // o nome/foto corretos apareçam desde o primeiro momento no feed e
-      // no perfil, sem precisar visitar Editar Perfil antes.
-      //
-      // Se essa busca falhar por algum motivo, não travamos o login por
-      // causa disso — o app segue funcionando com o login como fallback
-      // de nome, e sem foto.
+      // Busca dados do usuário (GET /users/me) para popular as stores.
+      // Falha silenciosamente pois o app pode funcionar sem esses dados imediatos.
       try {
         final user = await AuthRepository.instance.getCurrentUser();
         SessionStore.instance.updateProfile(
@@ -61,15 +52,14 @@ class _LoginScreenState extends State<LoginScreen> {
         );
         ProfileStore.instance.setNetworkProfileImageUrl(user.profileImage);
       } on ApiException {
-        // Ignorado de propósito — ver comentário acima.
+        // Ignora erro de fetch do perfil.
       }
  
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/home');
     } on ApiException catch (e) {
       if (!mounted) return;
-      // 401 = credenciais inválidas. A API não manda uma mensagem muito
-      // clara pra esse caso, então mostramos um texto fixo e amigável.
+      // Trata erro 401 (Credenciais Inválidas) com mensagem amigável.
       final message = e.statusCode == 401
           ? 'Login ou senha incorretos. Verifique os dados e tente novamente.'
           : e.message;

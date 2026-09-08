@@ -16,7 +16,7 @@ class PostsStore extends ChangeNotifier {
   final PostsRepository _postsRepository = PostsRepository.instance;
   final UsersRepository _usersRepository = UsersRepository.instance;
 
-  // Pegamos o usuário logado lá do SessionStore pra não precisar mockar mais.
+  // Obtém usuário logado do SessionStore.
   static String get currentUserName =>
       SessionStore.instance.name ?? SessionStore.instance.userLogin ?? '';
   static String get currentUserHandle =>
@@ -33,7 +33,7 @@ class PostsStore extends ChangeNotifier {
  
   bool isFollowedAuthor(String handle) => followedHandles.contains(handle);
  
-  // Essa lista filtra o feed pegando só os ids que a API retornou pra aba de Seguindo, assim a gente aproveita o cache.
+  // Filtra o feed usando apenas os IDs da aba de Seguindo, aproveitando o cache.
   List<Map<String, dynamic>> get followedFeedPosts => posts
       .where((post) => _followingPostIds.contains(post['id']))
       .take(currentFeedPage * 12)
@@ -46,7 +46,7 @@ class PostsStore extends ChangeNotifier {
  
   final List<Map<String, dynamic>> posts = [];
  
-  // Aqui a gente limita visualmente pra renderizar no máximo 12 posts de cada vez (currentFeedPage * 12). Se a API mandar 50 de uma vez, a gente não trava a home. O botão "Ver mais" vai liberando o resto.
+  // Limita visualmente os posts renderizados para não travar a UI. A paginação local controla a exibição.
   List<Map<String, dynamic>> get visiblePosts => posts.take(currentFeedPage * 12).toList();
  
   // Carrega o feed a partir da API.
@@ -152,7 +152,7 @@ class PostsStore extends ChangeNotifier {
   List<Map<String, dynamic>> get ownPosts =>
       posts.where((post) => post['handle'] == currentUserHandle).toList();
  
-  // Criei esse cache isolado pra consertar aquele erro de abrir um post pela tela de pesquisa/perfil e ele não carregar os dados completos.
+  // Cache isolado para garantir que dados completos sejam carregados ao abrir um post pela tela de pesquisa/perfil.
   final Map<String, Map<String, dynamic>> _isolatedPosts = {};
 
   void cacheIsolatedPost(Map<String, dynamic> post) {
@@ -439,7 +439,7 @@ class _ReplyScreenState extends State<_ReplyScreen> {
   }
 }
 
-// Componente visual que renderiza as respostas de forma recursiva (efeito escadinha).
+// Componente visual que renderiza as respostas de forma recursiva.
 class PostReplyList extends StatelessWidget {
   final List<Map<String, dynamic>> replies;
   final int depth;

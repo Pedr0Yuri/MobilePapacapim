@@ -261,59 +261,80 @@ class SearchScreenState extends State<SearchScreen>
       return const Center(child: CircularProgressIndicator(color: AppColors.cta));
     }
     if (_usersError != null && _users.isEmpty) {
-      return _buildErrorState(_usersError!, _searchUsers);
-    }
-    if (_users.isEmpty) {
-      return const Center(
-        child: Text('Nenhum usuário encontrado.', style: TextStyle(color: AppColors.textSecondary)),
+      return RefreshIndicator(
+        onRefresh: _searchUsers,
+        color: AppColors.cta,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [_buildErrorContent(_usersError!, _searchUsers)],
+        ),
       );
     }
-    return ListView.separated(
-      controller: _usersScrollController,
-      physics: const AlwaysScrollableScrollPhysics(),
-      itemCount: _users.length + 1,
-      separatorBuilder: (_, i) {
-        if (i == _users.length - 1) return const SizedBox.shrink(); // Hide line above 'Ver mais'
-        return Divider(
-          height: 1,
-          color: AppColors.inputBorder.withValues(alpha: 0.3),
-        );
-      },
-      itemBuilder: (context, i) {
-        if (i == _users.length) {
-          return Padding(
-            padding: const EdgeInsets.only(top: 16, bottom: 24),
-            child: _isLoadingMoreUsers
-                ? const Center(child: CircularProgressIndicator())
-                : TextButton(
-                    onPressed: _loadMoreUsers,
-                    child: const Text('Ver mais', style: TextStyle(color: AppColors.cta)),
-                  ),
-          );
-        }
-
-        final user = _users[i];
-        final handle = '@${user.login}';
-        return ListTile(
-          onTap: () => _navigateToProfile(user.name, handle),
-          leading: UserAvatar(
-            imageUrl: user.profileImage,
-            handle: handle,
-            radius: 20,
-          ),
-          title: Text(
-            user.name,
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-          subtitle: Text(
-            handle,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 13,
+    if (_users.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _searchUsers,
+        color: AppColors.cta,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [
+            SizedBox(height: 100),
+            Center(
+              child: Text('Nenhum usuário encontrado.', style: TextStyle(color: AppColors.textSecondary)),
             ),
-          ),
-        );
-      },
+          ],
+        ),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _searchUsers,
+      color: AppColors.cta,
+      child: ListView.separated(
+        controller: _usersScrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: _users.length + 1,
+        separatorBuilder: (_, i) {
+          if (i == _users.length - 1) return const SizedBox.shrink(); // Hide line above 'Ver mais'
+          return Divider(
+            height: 1,
+            color: AppColors.inputBorder.withValues(alpha: 0.3),
+          );
+        },
+        itemBuilder: (context, i) {
+          if (i == _users.length) {
+            return Padding(
+              padding: const EdgeInsets.only(top: 16, bottom: 24),
+              child: _isLoadingMoreUsers
+                  ? const Center(child: CircularProgressIndicator())
+                  : TextButton(
+                      onPressed: _loadMoreUsers,
+                      child: const Text('Ver mais', style: TextStyle(color: AppColors.cta)),
+                    ),
+            );
+          }
+
+          final user = _users[i];
+          final handle = '@${user.login}';
+          return ListTile(
+            onTap: () => _navigateToProfile(user.name, handle),
+            leading: UserAvatar(
+              imageUrl: user.profileImage,
+              handle: handle,
+              radius: 20,
+            ),
+            title: Text(
+              user.name,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            subtitle: Text(
+              handle,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -350,55 +371,95 @@ class SearchScreenState extends State<SearchScreen>
       return const Center(child: CircularProgressIndicator());
     }
     if (_postsError != null && _posts.isEmpty) {
-      return _buildErrorState(_postsError!, _searchPosts);
-    }
-    if (_posts.isEmpty) {
-      return const Center(
-        child: Text('Nenhuma postagem encontrada.', style: TextStyle(color: AppColors.textSecondary)),
+      return RefreshIndicator(
+        onRefresh: _searchPosts,
+        color: AppColors.cta,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [_buildErrorContent(_postsError!, _searchPosts)],
+        ),
       );
     }
-    return ListView.builder(
-      controller: _postsScrollController,
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      itemCount: _posts.length + 1,
-      itemBuilder: (context, i) {
-        if (i == _posts.length) {
-          return Padding(
-            padding: const EdgeInsets.only(top: 8, bottom: 24),
-            child: _isLoadingMorePosts
-                ? const Center(child: CircularProgressIndicator())
-                : TextButton(
-                    onPressed: _loadMorePosts,
-                    child: const Text('Ver mais', style: TextStyle(color: AppColors.cta)),
-                  ),
-          );
-        }
+    if (_posts.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _searchPosts,
+        color: AppColors.cta,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [
+            SizedBox(height: 100),
+            Center(
+              child: Text('Nenhuma postagem encontrada.', style: TextStyle(color: AppColors.textSecondary)),
+            ),
+          ],
+        ),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _searchPosts,
+      color: AppColors.cta,
+      child: ListView.builder(
+        controller: _postsScrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        itemCount: _posts.length + 1,
+        itemBuilder: (context, i) {
+          if (i == _posts.length) {
+            return Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 24),
+              child: _isLoadingMorePosts
+                  ? const Center(child: CircularProgressIndicator())
+                  : TextButton(
+                      onPressed: _loadMorePosts,
+                      child: const Text('Ver mais', style: TextStyle(color: AppColors.cta)),
+                    ),
+            );
+          }
 
-        final post = _posts[i];
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: PostCard(
-            post: post,
-            isSimplified: true, // Hide action bar
-            onTap: () {
-              PostsStore.instance.cacheIsolatedPost(post);
-              Navigator.of(context, rootNavigator: true).push(
-                MaterialPageRoute(
-                  builder: (_) => import_detail.PostDetailScreen(
-                    postId: post['id'],
+          final post = _posts[i];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: PostCard(
+              post: post,
+              isSimplified: true, // Hide action bar
+              onTap: () {
+                PostsStore.instance.cacheIsolatedPost(post);
+                Navigator.of(context, rootNavigator: true).push(
+                  MaterialPageRoute(
+                    builder: (_) => import_detail.PostDetailScreen(
+                      postId: post['id'],
+                    ),
                   ),
-                ),
-              );
-            },
-            onProfileTap: () =>
-                _navigateToProfile(post['name'], post['handle']),
-          ),
-        );
-      },
+                );
+              },
+              onProfileTap: () =>
+                  _navigateToProfile(post['name'], post['handle']),
+            ),
+          );
+        },
+      ),
     );
   }
  
+  Widget _buildErrorContent(String message, VoidCallback onRetry) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 60),
+            const Icon(Icons.wifi_off_rounded, color: AppColors.textSecondary, size: 40),
+            const SizedBox(height: 12),
+            Text(message, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.textSecondary)),
+            const SizedBox(height: 16),
+            TextButton(onPressed: onRetry, child: const Text('Tentar novamente')),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildErrorState(String message, VoidCallback onRetry) {
     return Center(
       child: Padding(

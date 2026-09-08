@@ -10,7 +10,6 @@ import '../widgets/app_top_bar.dart';
 import '../widgets/post_card.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/user_avatar.dart';
-import 'followers_screen.dart';
 import 'post_detail_screen.dart' as import_detail;
 
 // Tela de Perfil do Usuário.
@@ -217,6 +216,7 @@ class ProfileScreenState extends State<ProfileScreen> {
       );
     }
     return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: EdgeInsets.zero,
       itemCount: _userPosts.length,
       itemBuilder: (context, i) {
@@ -245,7 +245,7 @@ class ProfileScreenState extends State<ProfileScreen> {
                 post['liked'] = !liked;
                 post['likes'] = (post['likes'] as int) + (liked ? -1 : 1);
               });
-              // Chama a API através da store
+              // Persiste a alteração do like no servidor.
               _store.toggleLike(post['id']);
             },
             onReply: () async {
@@ -340,7 +340,7 @@ class ProfileScreenState extends State<ProfileScreen> {
                 ElevatedButton(
                   onPressed: () async {
                     await _store.toggleFollow(displayHandle);
-                    // Recarrega os dados do perfil pra atualizar contagem
+                    // Atualiza contagem de seguidores após a ação.
                     _loadUserData();
                   },
                   style: ElevatedButton.styleFrom(
@@ -391,7 +391,7 @@ class ProfileScreenState extends State<ProfileScreen> {
                   color: AppColors.textSecondary,
                 ),
               ),
-              // Badges "Segue você" quando outro usuário te segue
+              // Indicador visual de que o usuário também te segue.
               if (!isOwnProfile && user?.followsYou == true) ...[
                 const SizedBox(height: 6),
                 Container(
@@ -418,47 +418,38 @@ class ProfileScreenState extends State<ProfileScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Row(
             children: [
-              Text(
-                _formatCount(followingCount),
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(width: 4),
-              const Text(
-                'Seguindo',
-                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+              Row(
+                children: [
+                  Text(
+                    _formatCount(followingCount),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Text(
+                    'Seguindo',
+                    style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                  ),
+                ],
               ),
               const SizedBox(width: 24),
-              GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => FollowersScreen(
-                        login: _login,
-                        title: 'Seguidores de ${_userData?.name ?? displayName}',
-                      ),
+              Row(
+                children: [
+                  Text(
+                    _formatCount(followersCount),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
                     ),
-                  );
-                },
-                child: Row(
-                  children: [
-                    Text(
-                      _formatCount(followersCount),
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    const Text(
-                      'Seguidores',
-                      style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Text(
+                    'Seguidores',
+                    style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                  ),
+                ],
               ),
             ],
           ),

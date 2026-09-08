@@ -68,6 +68,8 @@ class UsersRepository {
     return posts;
   }
 
+
+
   /// Segue um usuário.
   /// Endpoint: POST /users/{login}/followers
   Future<void> followUser(String login) async {

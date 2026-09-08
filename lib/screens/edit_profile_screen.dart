@@ -330,14 +330,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     setState(() => _isSaving = true);
  
     try {
-      // Só manda a foto se o usuário realmente trocou ela NESTA sessão —
-      // caso contrário a API mantém a foto que já estava salva.
+      // Envia a imagem apenas se alterada na sessão atual para preservar a imagem remota.
       String? imageBase64;
       if (_imageChanged && _profileStore.localProfileImageBytes != null) {
         imageBase64 = base64Encode(_profileStore.localProfileImageBytes!);
       }
  
-      // Chama PATCH /users/me na API.
+      // Atualiza os dados no servidor.
       final updatedUser = await AuthRepository.instance.updateUser(
         name: name,
         password: isChangingPassword ? pass : null,

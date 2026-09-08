@@ -21,7 +21,7 @@ class FeedScreenState extends State<FeedScreen> {
   final ScrollController _allPostsScrollController = ScrollController();
   final ScrollController _followingPostsScrollController = ScrollController();
 
-  // Coloquei esse ScrollController pra gente conseguir fazer a tela rolar pro topo quando o usuário dá um double-tap no ícone da Home lá embaixo.
+  // Permite rolar a tela para o topo ao dar double-tap no ícone da Home.
   void scrollToTop() {
     if (_allPostsScrollController.hasClients) {
       _allPostsScrollController.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
