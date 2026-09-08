@@ -24,6 +24,12 @@ class ProfileStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  void clearProfileImage() {
+    localProfileImageBytes = null;
+    networkProfileImageUrl = null;
+    notifyListeners();
+  }
+
   ImageProvider? get profileImageProvider {
     final bytes = localProfileImageBytes;
     if (bytes != null) return MemoryImage(bytes);

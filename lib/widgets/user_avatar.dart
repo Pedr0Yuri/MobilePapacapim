@@ -54,37 +54,13 @@ class UserAvatar extends StatelessWidget {
   }
 
   Widget _buildNetworkAvatar(String url, double fallbackIconSize) {
-    final absoluteUrl = ApiConfig.getProfileImageUrl(url);
-
-    return ClipOval(
-      child: SizedBox(
-        width: radius * 2,
-        height: radius * 2,
-        child: Image.network(
-          absoluteUrl,
-          fit: BoxFit.cover,
-          width: radius * 2,
-          height: radius * 2,
-          loadingBuilder: (context, child, loadingProgress) {
-            if (loadingProgress == null) return child;
-            return Center(
-              child: SizedBox(
-                width: radius * 0.8,
-                height: radius * 0.8,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  value: loadingProgress.expectedTotalBytes != null
-                      ? loadingProgress.cumulativeBytesLoaded /
-                          loadingProgress.expectedTotalBytes!
-                      : null,
-                  color: AppColors.secondary.withValues(alpha: 0.4),
-                ),
-              ),
-            );
-          },
-          errorBuilder: (_, __, ___) => _buildFallback(fallbackIconSize),
-        ),
-      ),
+    return CircleAvatar(
+      radius: radius,
+      backgroundImage: NetworkImage(url),
+      onBackgroundImageError: (exception, stackTrace) {
+        print('ERRO AO CARREGAR FOTO: $exception');
+        print('URL DA FOTO: $url');
+      },
     );
   }
 

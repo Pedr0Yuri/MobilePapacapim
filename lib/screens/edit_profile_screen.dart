@@ -464,6 +464,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               setState(() => _isSaving = true);
                               try {
                                 await AuthRepository.instance.deleteAccount();
+                                ProfileStore.instance.clearProfileImage();
                                 if (!context.mounted) return;
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
