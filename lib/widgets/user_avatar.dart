@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../data/posts_store.dart';
 import '../data/profile_store.dart';
-import '../core/api_config.dart';
 
 class UserAvatar extends StatelessWidget {
   final String? imageUrl;
